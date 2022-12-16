@@ -19,7 +19,7 @@ class GraphData:
     # @property
     def is_connected(self) -> bool:
         x_index = np.arange(start=0, stop=self.n_node)
-        print(np.all(np.isin(x_index, self.edge_index)))
+        all_nodes_are_in_edges = np.all(np.isin(x_index, self.edge_index))
         return True
 
     @property
