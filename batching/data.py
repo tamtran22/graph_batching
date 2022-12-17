@@ -25,6 +25,12 @@ class GraphData:
     @property
     def is_tree(self) -> bool:
         return (self.n_edge == self.n_node-1)
+
+    def adjacency(self, i, j) -> np.int32:
+        return np.isin([np.array([i, j])], np.transpose(self.edge_index))[0]
+
+    def breadth_first_search(self, node_id):
+        pass
         
 
 if __name__ == '__main__':
@@ -37,4 +43,4 @@ if __name__ == '__main__':
     edge_attr = np.random.random(size=(n_edge, edge_dim))
     
     data = GraphData(x, edge_index, edge_attr)
-    print(data.is_tree)
+    print(data.adjacency(1,2))
