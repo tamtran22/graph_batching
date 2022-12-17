@@ -16,15 +16,16 @@ class GraphData:
     def n_edge(self):
         return self.edge_index.shape[1]
 
-    # @property
+    @property
     def is_connected(self) -> bool:
-        x_index = np.arange(start=0, stop=self.n_node)
-        all_nodes_are_in_edges = np.all(np.isin(x_index, self.edge_index))
+        # x_index = np.arange(start=0, stop=self.n_node)
+        # all_nodes_are_in_edges = np.all(np.isin(x_index, self.edge_index))
         return True
 
     @property
     def is_tree(self) -> bool:
         return (self.n_edge == self.n_node-1)
+        
 
 if __name__ == '__main__':
     n_node = 567891
@@ -36,4 +37,4 @@ if __name__ == '__main__':
     edge_attr = np.random.random(size=(n_edge, edge_dim))
     
     data = GraphData(x, edge_index, edge_attr)
-    data.is_connected()
+    print(data.is_tree)
