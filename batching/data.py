@@ -33,28 +33,52 @@ class GraphData:
                 return 1
         return 0
 
-    def breadth_first_search(self, node_id, n_node_max=100):
-        visited = np.zeros((self.n_node,), dtype = np.int32)
-        queue = []
-        current_node_id = node_id
-        queue.append(node_id)
-        visited[node_id] = 1
+    # def bfs_node(self, node_id, n_node_max=100):
+    #     visited = np.zeros((self.n_node,), dtype = np.int32)
+    #     queue = np.zeros(shape=(n_node_max,), dtype=np.int32)
+    #     current_node_id = node_id
+    #     pop_id = 0
+    #     append_id = 0
 
-        queue_id = 0
-        while len(queue) < n_node_max:
-            current_node_id = queue[queue_id]
-            queue_id += 1
-            neighbor_node_ids = np.unique(np.concatenate([\
-                self.edge_index[1][np.where(self.edge_index[0]==current_node_id)[0]],\
-                self.edge_index[0][np.where(self.edge_index[1]==current_node_id)[0]]
-            ]))
-            for neighbor_node_id in neighbor_node_ids:
-                if visited[neighbor_node_id] == 0:
-                    queue.append(neighbor_node_id)
-                    visited[neighbor_node_id] = 1
-                    if len(queue) > n_node_max:
-                        break
-        return queue
+    #     queue[append_id] = current_node_id
+    #     visited[current_node_id] = 1
+    #     append_id += 1
+
+    #     while append_id < n_node_max:
+    #         if pop_id >= append_id:
+    #             break
+
+    #         current_node_id = queue[pop_id]
+    #         pop_id += 1
+
+    #         # neighbor_node_ids = np.unique(np.concatenate([\
+    #         #     self.edge_index[1][np.where(self.edge_index[0]==current_node_id)[0]],\
+    #         #     self.edge_index[0][np.where(self.edge_index[1]==current_node_id)[0]]
+    #         # ]))
+
+    #         neighbor_node_ids = np.unique(
+    #             self.edge_index[1][np.where(self.edge_index[0]==current_node_id)[0]]
+    #         )
+
+    #         for neighbor_node_id in neighbor_node_ids:
+    #             if visited[neighbor_node_id] == 0:
+
+    #                 queue[append_id] = neighbor_node_id
+    #                 visited[neighbor_node_id] = 1
+    #                 append_id += 1
+
+    #                 if append_id >= n_node_max:
+    #                     break
+    #     return queue
+
+    # def get_batch_edge_index(self, batch_node):
+    #     _batch_edge_index = np.isin(self.edge_index, batch_node)
+    #     _batch_edge_index = np.logical_and(_batch_edge_index[0], _batch_edge_index[1])
+    #     _batch_edge_index = np.where(_batch_edge_index == True)[0]
+
+    #     batch_edge_index = np.transpose(np.transpose(self.edge_index)[_batch_edge_index])
+
+    #     return batch_edge_index
         
 
 if __name__ == '__main__':
@@ -67,12 +91,7 @@ if __name__ == '__main__':
     edge_attr = np.random.random(size=(n_edge, edge_dim))
     
     data = GraphData(x, edge_index, edge_attr)
-    queue = data.breadth_first_search(100)
-    print(np.shape(queue))
-    edge_batch = np.isin(data.edge_index, queue)
-    edge_batch = np.logical_and(edge_batch[0], edge_batch[1])
-    edge_batch = np.where(edge_batch == True)[0]
-    print(edge_batch.shape)
-    t_edge_index = np.transpose(data.edge_index)
-    for i in edge_batch:
-        print(t_edge_index[i])
+    # queue = data.bfs_node(100, n_node_max=1000)
+    # print(queue.shape)
+    # edge_batch = data.get_batch_edge_index(queue)
+    # print(edge_batch.shape)
