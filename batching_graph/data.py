@@ -91,7 +91,6 @@ if __name__ == '__main__':
     edge_attr = np.random.random(size=(n_edge, edge_dim))
     
     data = GraphData(x, edge_index, edge_attr)
-    # queue = data.bfs_node(100, n_node_max=1000)
-    # print(queue.shape)
-    # edge_batch = data.get_batch_edge_index(queue)
-    # print(edge_batch.shape)
+    
+    
+    bfs_batching(data, root_id = 0)
