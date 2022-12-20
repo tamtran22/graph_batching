@@ -32,53 +32,6 @@ class GraphData:
             if _u == v:
                 return 1
         return 0
-
-    # def bfs_node(self, node_id, n_node_max=100):
-    #     visited = np.zeros((self.n_node,), dtype = np.int32)
-    #     queue = np.zeros(shape=(n_node_max,), dtype=np.int32)
-    #     current_node_id = node_id
-    #     pop_id = 0
-    #     append_id = 0
-
-    #     queue[append_id] = current_node_id
-    #     visited[current_node_id] = 1
-    #     append_id += 1
-
-    #     while append_id < n_node_max:
-    #         if pop_id >= append_id:
-    #             break
-
-    #         current_node_id = queue[pop_id]
-    #         pop_id += 1
-
-    #         # neighbor_node_ids = np.unique(np.concatenate([\
-    #         #     self.edge_index[1][np.where(self.edge_index[0]==current_node_id)[0]],\
-    #         #     self.edge_index[0][np.where(self.edge_index[1]==current_node_id)[0]]
-    #         # ]))
-
-    #         neighbor_node_ids = np.unique(
-    #             self.edge_index[1][np.where(self.edge_index[0]==current_node_id)[0]]
-    #         )
-
-    #         for neighbor_node_id in neighbor_node_ids:
-    #             if visited[neighbor_node_id] == 0:
-
-    #                 queue[append_id] = neighbor_node_id
-    #                 visited[neighbor_node_id] = 1
-    #                 append_id += 1
-
-    #                 if append_id >= n_node_max:
-    #                     break
-    #     return queue
-
-    # def get_batch_edge_index(self, batch_node):
-    #     _batch_edge_index = np.isin(self.edge_index, batch_node)
-    #     _batch_edge_index = np.logical_and(_batch_edge_index[0], _batch_edge_index[1])
-    #     _batch_edge_index = np.where(_batch_edge_index == True)[0]
-
-    #     batch_edge_index = np.transpose(np.transpose(self.edge_index)[_batch_edge_index])
-
-    #     return batch_edge_index
         
 
 if __name__ == '__main__':
@@ -91,6 +44,3 @@ if __name__ == '__main__':
     edge_attr = np.random.random(size=(n_edge, edge_dim))
     
     data = GraphData(x, edge_index, edge_attr)
-    
-    
-    bfs_batching(data, root_id = 0)
