@@ -22,17 +22,20 @@ def bfs_batching(data : GraphData, start_root : int, batch_size : int = 100):
         while queue:
             # Explore next node stored in queue.
             curr_node = queue.pop(0)
-            # Append a parrent node to upper part.
-            sub_graph_upper.append(curr_node)
+
             # Find all neighbor nodes from current node.
             neighbor_nodes = np.unique(data.edge_index[1][np.where(data.edge_index[0] == curr_node)[0]]).tolist()
             for node in neighbor_nodes:
                 if mark[node] > 0:
                     continue
-                mark[node] = 1
+                mark[node] = 2
                 queue.append(node)
                 if len(sub_graph_upper) + len(queue) >= batch_size:
-                    return sub_graph_upper, queue
+                    break
+                
+            # Append a parrent node to upper part.
+            sub_graph_upper.append(curr_node)
+            mark[curr_node] = 1
         return sub_graph_upper, queue
 
     while root_queue:
