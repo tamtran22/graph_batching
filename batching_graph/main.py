@@ -1,6 +1,6 @@
 import numpy as np
 from data import GraphData
-from batching import bfs_batching
+from batching import spectral_clustering
 
 
 if __name__ == '__main__':
@@ -13,4 +13,4 @@ if __name__ == '__main__':
     edge_attr = np.random.random(size=(n_edge, edge_dim))
     
     data = GraphData(x, edge_index, edge_attr)
-    bfs_batching(data, start_root=0, batch_size=10)
+    spectral_clustering(data, 10)
