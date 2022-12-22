@@ -10,7 +10,7 @@ def read_file_input(
         file_name,
         var_name_dict = {
             'x' : ['x_end', 'y_end', 'z_end'], 
-            'edge_index' : ['ID', 'PareID'], 
+            'edge_index' : ['PareID', 'ID'], 
             'edge_attr' : ['Length', 'Diameter', 'Gene', 'Lobe', 'Vol1-0']
         }
     ):

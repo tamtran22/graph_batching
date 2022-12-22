@@ -13,7 +13,7 @@ def spectral_clustering(data : GraphData, n_cluster : int = 10):
         u = data.edge_index[0][i]
         v = data.edge_index[1][i]
         adj_mat[u,v] = 1
-        adj_mat[v,u] = 1
+        # adj_mat[v,u] = 1
     # for i in range(data.n_node):
     #     adj_mat[i,i] = 1
     # adj_mat = adj_mat.todense().as
@@ -28,11 +28,24 @@ def spectral_clustering(data : GraphData, n_cluster : int = 10):
     # cluster_handler.fit(adj_mat)
     (edge_cuts, parts) = part_graph(graph=graph, nparts=n_cluster)
     print(f'Clustering in {time.time() - curr_time} seconds.')
+
+
+
     batch_node = np.where(np.array(parts) == 0)[0]
-    print(batch_node)
+    # print(batch_node)
+    batch_edge = np.isin(data.edge_index, batch_node)
+    batch_edge = np.logical_and(batch_edge[0], batch_edge[1])
+    batch_edge = np.where(batch_edge == True)[0]
+    # for i in range(batch_edge.shape[0]):
+    #     print(data.edge_index[0, i], data.edge_index[1, i])
+    batch_edge = data.edge_index[:,batch_edge]
+    batch_adj = sparse.dok_matrix((batch_node.shape[0], batch_node.shape[0]))
+    for i in range(batch_edge.shape[1]):
+        u = list(batch_node).index(batch_edge[0][i])
+        v = list(batch_node).index(batch_edge[1][i])
+        batch_adj[u,v] = 1
+        # batch_adj[v,u] = 1
+    batch_graph = nx.from_scipy_sparse_matrix(batch_adj)
+    print(batch_adj)
+    nx.draw_networkx(batch_graph)
     
-    edge_batch = np.isin(data.edge_index, batch_node)
-    edge_batch = np.logical_and(edge_batch[0], edge_batch[1])
-    edge_batch = np.where(edge_batch == True)[0]
-    for i in range(edge_batch.shape[0]):
-        print(data.edge_index[0, i], data.edge_index[1, i])
