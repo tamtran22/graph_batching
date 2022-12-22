@@ -1,16 +1,20 @@
 import numpy as np
 from data import GraphData
 from batching import spectral_clustering
+from file_reader import read_file_input, read_file_output
 
 
 if __name__ == '__main__':
-    n_node = 56891
-    node_dim = 4
-    n_edge = 302315
-    edge_dim = 4
-    x = np.random.random(size=(n_node, node_dim))
-    edge_index = np.random.randint(low=0, high=n_node, size=(2,n_edge))
-    edge_attr = np.random.random(size=(n_edge, edge_dim))
+    # Read Output_Amount_St_whole.dat.
+    var = read_file_input(file_name='./data_test/Output_10081_Amount_St_whole.dat')
+    print('Finished reading input file.')
+    # Create graph data instance.
+    data = GraphData(var['x'], var['edge_index'], var['edge_attr'])
+    print('Finished creating graph data instance.')
+    # Spectral clustering
+    spectral_clustering(
+        data=data,
+        n_cluster=500
+    )
+    print('Finish spectral clustering.')
     
-    data = GraphData(x, edge_index, edge_attr)
-    spectral_clustering(data, 10)
