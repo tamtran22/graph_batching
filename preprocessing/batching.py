@@ -4,7 +4,10 @@ from scipy import sparse
 # from sklearn.cluster import SpectralClustering
 import metis
 import networkx as nx
-import time
+
+
+from sknetwork.clustering import Louvain
+from sklearn.metrics.cluster import normalized_mutual_info_score
 
 def metis_batching(data : GraphData, relative_batch_size : int = 100, recursive : bool = False):
     n_batch = int(data.n_node / relative_batch_size)
@@ -35,3 +38,15 @@ def metis_batching(data : GraphData, relative_batch_size : int = 100, recursive 
         batch_edge_attr = data.edge_attr[batch_edge]
         batchs.append(GraphData(batch_x, batch_edge_index, batch_edge_attr))
     return batchs
+
+def louvain_batching(data : GraphData, relative_batch_size : int = 100, recursive : bool = False):
+    n_batch = int(data.n_node / relative_batch_size)
+    nodelist = list(range(data.n_node))
+    edgelist = list(map(tuple,data.edge_index.transpose()))
+    graph = nx.from_edgelist(edgelist=edgelist)
+    
+    adj = nx.adjacency_matrix(graph)
+    louvain = Louvain()
+    clusters = louvain.fit_transform(adj)
+
+    print(clusters)
