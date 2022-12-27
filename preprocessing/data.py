@@ -1,6 +1,7 @@
 import numpy as np
 from dataclasses import dataclass
 from typing import Optional
+import networkx as nx
 
 @dataclass
 class GraphData:
@@ -30,3 +31,8 @@ class GraphData:
             if _u == v:
                 return 1
         return 0
+    
+    def render(self):
+        edgelist = list(map(tuple,self.edge_index.transpose()))
+        graph = nx.from_edgelist(edgelist)
+        nx.draw(graph)
