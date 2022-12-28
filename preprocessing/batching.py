@@ -3,7 +3,7 @@ from data import GraphData
 
 import networkx as nx
 
-import metis
+import nxmetis
 
 from sknetwork.clustering import Louvain, PropagationClustering
 from sklearn.metrics.cluster import normalized_mutual_info_score
@@ -14,7 +14,7 @@ def metis_batching(data : GraphData, relative_batch_size : int = 100, recursive 
     edgelist = list(map(tuple,data.edge_index.transpose()))
     graph = nx.from_edgelist(edgelist=edgelist)
     
-    (_, parts) = metis.part_graph(
+    (_, parts) = nxmetis.partition(
         graph=graph,
         nparts=n_batch
     )
