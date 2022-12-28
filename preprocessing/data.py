@@ -36,3 +36,9 @@ class GraphData:
         edgelist = list(map(tuple,self.edge_index.transpose()))
         graph = nx.from_edgelist(edgelist)
         nx.draw(graph)
+
+    @property
+    def number_connected_components(self):
+        edgelist = list(map(tuple,self.edge_index.transpose()))
+        graph = nx.from_edgelist(edgelist)
+        return nx.number_connected_components(graph)
