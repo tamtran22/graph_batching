@@ -42,3 +42,27 @@ class GraphData:
         edgelist = list(map(tuple,self.edge_index.transpose()))
         graph = nx.from_edgelist(edgelist)
         return nx.number_connected_components(graph)
+
+
+
+
+
+#######################################################################
+from torch_geometric.data import Data
+
+class TorchGraphData(Data):
+
+    @property
+    def graph(self):
+        edgelist = list(map(tuple, self.edge_index.numpy().transpose()))
+        return nx.from_edgelist(edgelist)
+    
+    def render(self):
+        nx.draw(self.graph)
+
+if __name__=='__main__':
+    data = TorchGraphData(
+        x=np.ones(shape=(10,3)),
+        edge_index=np.ones(shape=(2,15), dtype=int),
+        edge_attr=np.ones(shape=(15,2))
+    )
