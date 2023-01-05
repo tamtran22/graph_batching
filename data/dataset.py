@@ -14,11 +14,8 @@ class BaseGraphDataset(Dataset):
         root_dir: Optional[str] = None, 
         transform: Optional[Callable] = None, 
         pre_transform: Optional[Callable] = None, 
-        pre_filter: Optional[Callable] = None,
-        loader: Optional[bool] = False
+        pre_filter: Optional[Callable] = None
     ):
-        self.raw_dir = raw_dir
-        self.loader = loader
         super().__init__(root_dir, transform, pre_transform, pre_filter)
     
     @property
