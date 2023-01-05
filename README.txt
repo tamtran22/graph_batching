@@ -6,3 +6,8 @@ Initialized by Tam TM in 221216
 github source: https://github.com/tamtran22/python_graph_utilities.git
 ***
 ~other information
+
+***
+Required libraries
+    nxmetis, networkx, Cython
+    torch, torch_geometric
