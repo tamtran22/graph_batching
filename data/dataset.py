@@ -4,11 +4,13 @@ import torch
 from torch_geometric.data import Dataset
 from data.data import TorchGraphData
 from typing import Optional, Callable, Union, List, Tuple
+from data.file_reader import *
 
 
-class BaseGraphDataset(Dataset):
-    r"""Dataset base class for 
-    
+class DatasetLoader(Dataset):
+    r"""Base dataset loader class for graph data
+    Loader is specifically used for loading a processed dataset.
+    Function 'process()' is not implemented.
     """
     def __init__(self, 
         root_dir: Optional[str] = None, 
@@ -23,5 +25,65 @@ class BaseGraphDataset(Dataset):
         raise NotImplemented
 
     @property
-    def processed_file_names(self) -> Union[str, List[str], Tuple]:
-        return super().processed_file_names
+    def processed_file_names(self) -> Union[List[str], Tuple]:
+        return [self.root+'/processed/'+data+'.pt' 
+                                for data in self.data_names]
+
+    def process(self):
+        raise NotImplemented
+    
+    @property
+    def length(self):
+        return len(self.data_names)
+
+    def __getitem__(self, index):
+        return torch.load(self.processed_file_names[index])
+
+
+
+class DatasetBuilder(Dataset):
+    r"""Base dataset builder class for graph data
+    Builder is specifically used for read/process/save graph dataset. 
+    """
+    def __init__(self,
+        raw_dir: Optional[str] = None,
+        root_dir: Optional[str] = None
+    ):
+        # No transforming for builder class.
+        transform = None
+        pre_transform = None
+        pre_filter = None
+        super().__init__(root_dir, transform, pre_transform, pre_filter)
+    
+    @property
+    def data_names(self) -> Union[List[str], Tuple]:
+        raise NotImplemented
+
+    def process(self):
+        # Write code for data processing here.
+        raise NotImplemented
+
+class OneDDatasetBuilder(DatasetBuilder):
+    r"""Constructing OneD dataset
+    """
+    def data_names(self) -> Union[List[str], Tuple]:
+        return super().data_names
+    
+    def process(self):
+        # Output_subject_Amout_St_whole.dat
+        file_name_input = lambda subject : self.raw_file_dir+'/'+subject+\
+            '/CFD_1D/Output_'+subject+'_Amount_St_whole.dat'
+        # data_plt_nd/plt_nd_000time.dat
+        file_name_output = lambda subject, time : self.raw_file_dir+'/'+subject+\
+            '/CFD_1D/data_plt_nd/plt_nd_000'+time+'.dat'
+        for subject in self.data_names:
+            data_dict_input = read_1D_input(file_name_input(subject))
+            data_dict_output = read_1D_output(file_name_output, subject, self.time_id)
+            data = TorchGraphData(
+                x = torch.tensor(data_dict_input['x']).type(torch.float32),
+                edge_index = torch.tensor(data_dict_input['edge_index']).type(torch.LongTensor),
+                edge_attr = torch.tensor(data_dict_input['edge_attr']).type(torch.float32),
+                pressure = torch.tensor(data_dict_output['pressure']).type(torch.float32),
+                flowrate = torch.tensor(data_dict_output['flowrate']).type(torch.float32)[1:,]
+            )
+            torch.save(data, self.processed_file_names[self.data_names.index(subject)])
