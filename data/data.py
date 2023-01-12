@@ -4,10 +4,9 @@ from typing import Optional
 from torch import Tensor
 
 class TorchGraphData(Data):
-    '''
+    r"""
     Graph data class expanded from torch_geometric.data.Data()
-
-    '''
+    """
     def __init__(self, 
         x: Optional[Tensor] = None, 
         edge_index: Optional[Tensor] = None, 

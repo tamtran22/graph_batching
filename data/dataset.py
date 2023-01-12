@@ -119,11 +119,14 @@ class OneDDatasetBuilder(DatasetBuilder):
             data_dict_input = read_1D_input(file_name_input(subject))
             file_names_output = [file_name_output(subject, time) for time in self.time_id]
             data_dict_output = read_1D_output(file_names_output)
+            data_dict_output['velocity'] = 1e9 * data_dict_output['flowrate'] / \
+                        (np.pi * np.square(data_dict_input['diam']) / 4) # m -> mm
             data = TorchGraphData(
-                x = torch.tensor(data_dict_input['x']).type(torch.float32),
+                x = torch.tensor(data_dict_input['node_attr']).type(torch.float32),
                 edge_index = torch.tensor(data_dict_input['edge_index']).type(torch.LongTensor),
                 edge_attr = torch.tensor(data_dict_input['edge_attr']).type(torch.float32),
                 pressure = torch.tensor(data_dict_output['pressure']).type(torch.float32),
-                flowrate = torch.tensor(data_dict_output['flowrate']).type(torch.float32)
+                flowrate = torch.tensor(data_dict_output['flowrate']).type(torch.float32),
+                velocity = torch.tensor(data_dict_output['velocity']).type(torch.float32)
             )
             torch.save(data, self.processed_file_names[self.data_names.index(subject)])

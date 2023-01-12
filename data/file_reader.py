@@ -3,11 +3,18 @@ import numpy as np
 
 def read_1D_input(
         file_name : str,
+        # var_dict = {
+        #     'x' : ['x_end', 'y_end', 'z_end'], 
+        #     'edge_index' : ['PareID', 'ID'], 
+        #     'edge_attr' : ['Length', 'Diameter', 'Gene', 'Lobe', 'Vol1-0', 'Vol0', 'Vol1', 'Flag']
+        # },
         var_dict = {
-            'x' : ['x_end', 'y_end', 'z_end'], 
-            'edge_index' : ['PareID', 'ID'], 
-            'edge_attr' : ['Length', 'Diameter', 'Gene', 'Lobe', 'Vol1-0']
-        }
+            'node_attr' : ['x_end', 'y_end', 'z_end'],
+            'edge_index' : ['PareID', 'ID'],
+            'edge_attr' : ['Length', 'Diameter', 'Gene', 'Lobe', 'Vol0', 'Vol1', 'Flag'],
+            'diam' : ['Diameter']
+        },
+        log : bool = True,
     ):
     r"""Read Output_subject_Amount_St_whole.dat
     Data format
@@ -18,7 +25,7 @@ def read_1D_input(
     -  -      -      -        ... -      -    -
     """
     def _float(str):
-        _dict = {'C':0, 'P':0, 'E':0, 'G':0, 'T':1}
+        _dict = {'C':0, 'P':1, 'E':2, 'G':3, 'T':4}
         try:
             return float(str)
         except:
@@ -55,15 +62,22 @@ def read_1D_input(
     data_dict['y_end'] = np.insert(data_dict['y_end'], 0, data_dict['y_start'][0])
     data_dict['z_end'] = np.insert(data_dict['z_end'], 0, data_dict['z_start'][0])
 
+    # Scaling data
+    if log:
+        data_dict['Vol0'] = np.log(data_dict['Vol0'] + 1e-9) 
+        data_dict['Vol1'] = np.log(data_dict['Vol1'] + 1e-9) 
+        # data_dict['Vol1-0'] = np.log(data_dict['Vol1-0'] + 1e-9) 
+
     out_dict = {}
     for var in var_dict:
         out_dict[var] = []
         for data_var in var_dict[var]:
             out_dict[var].append(data_dict[data_var])
 
-    out_dict['x'] = np.array(out_dict['x'], dtype=np.float32).transpose()
+    out_dict['node_attr'] = np.array(out_dict['node_attr'], dtype=np.float32).transpose()
     out_dict['edge_index'] = np.array(out_dict['edge_index'], dtype=np.int32)
-    out_dict['edge_attr'] = np.array(out_dict['edge_attr'], dtype=np.float32)
+    out_dict['edge_attr'] = np.array(out_dict['edge_attr'], dtype=np.float32).transpose()
+    out_dict['diam'] = np.array(out_dict['diam'], dtype=np.float32).transpose()
     return out_dict
 
 def read_1D_output(
@@ -138,12 +152,29 @@ def read_1D_output(
 
 def node_to_edge(node_attr, edge_index):
     return np.array([node_attr[i] for i in edge_index[1]])
-        
+
+def edge_to_node(edge_attr, edge_index):
+    n_node = edge_index.max() + 1
+    if len(edge_attr.shape) <=1:
+        node_attr = np.zeros(shape=(n_node,) , dtype=np.float32)
+    else:
+        n_attr = edge_attr.shape[1]
+        node_attr = np.zeros(shape=(n_node, n_attr) , dtype=np.float32)
+    for i in range(edge_index.shape[1]):
+        node_attr[edge_index[1][i]] = edge_attr[i]
+    # find root
+    child_node_flag = np.isin(edge_index[0], edge_index[1])
+    root = np.where(child_node_flag == False)[0][0]
+    node_attr[edge_index[0][root]] = edge_attr[root]
+    return node_attr
 
 if __name__ == '__main__':
-    time_id = [str(i).zfill(3) for i in range(201)]
-    file_names = [f'/data1/tam/datasets/10081/CFD_1D/data_plt_nd/plt_nd_000{i}.dat' for i in time_id]
-    data = read_1D_output(
-        file_names=file_names
+    # time_id = [str(i).zfill(3) for i in range(201)]
+    # file_names = [f'/data1/tam/datasets/10081/CFD_1D/data_plt_nd/plt_nd_000{i}.dat' for i in time_id]
+    file_name = 'test_datafile/Output_10081_Amount_St_whole.dat'
+    data = read_1D_input(
+        file_name=file_name
     )
-    print(data)
+    print(data['edge_attr'].shape)
+    print(edge_to_node(data['edge_attr'], data['edge_index']).shape)
+    print(node_to_edge(edge_to_node(data['edge_attr'], data['edge_index']), data['edge_index']).shape)
