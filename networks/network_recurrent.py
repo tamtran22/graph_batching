@@ -16,14 +16,14 @@ class objectview(object):
 
 
 #####################################################################
-class GraphProcessorLayer(MessagePassing):
+class ProcessorLayer(MessagePassing):
     '''
     Graph processor takes node wise and edge wise input and return
     node wise and edge wise output with given shape
     '''
     def __init__(self, in_channels, out_channels, use_residual = True, 
                 aggregate_type = 'sum', **kwargs) -> None:
-        super(GraphProcessorLayer, self).__init__( **kwargs )
+        super(ProcessorLayer, self).__init__( **kwargs )
         self.use_residual = use_residual
         self.aggregate_type = aggregate_type
         self.node_mlp = Sequential(
