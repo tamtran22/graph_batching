@@ -270,32 +270,6 @@ class MeshGraphNet(torch.nn.Module):
 ###################################################################################
 # Main class
 ###################################################################################
-# class EmbeddedNet(torch.nn.Module):
-#     def __init__(self, input_dim_node, input_dim_edge, hidden_dim, output_dim, 
-#         num_processor_layers = 5, emb=False, add_self_loops=True):
-#         super(EmbeddedNet, self).__init__()
-#         args = objectview({'num_layers' : num_processor_layers})
-#         self.mesh_graph_net = MeshGraphNet(
-#             input_dim_node = input_dim_node,
-#             input_dim_edge = input_dim_edge,
-#             hidden_dim = hidden_dim,
-#             output_dim = output_dim,
-#             args = args,
-#             emb = emb
-#         )
-#         self.add_self_loops = add_self_loops
-#     def forward(self, x, edge_index, edge_attr):
-#         if self.add_self_loops:
-#             edge_index, edge_attr = remove_self_loops(edge_index, edge_attr)
-#             edge_index, edge_attr = add_self_loops(edge_index, edge_attr)
-#         node_out = self.mesh_graph_net(
-#             edge_index = edge_index,
-#             x = x,
-#             edge_attr = edge_attr
-#         )
-#         if self.add_self_loops:
-#             edge_index, edge_attr = remove_self_loops(edge_index, edge_attr)
-#         return node_out
         
 class EmbeddedNet(torch.nn.Module):
     def __init__(self, input_dim_node, input_dim_edge, hidden_dim, output_dim, 
@@ -326,6 +300,9 @@ class EmbeddedNet(torch.nn.Module):
         if self.add_self_loops:
             edge_index, edge_out = remove_self_loops(edge_index, edge_out)
         return node_out, edge_out
+
+    # def forward(self, data):
+        
 
 
 
