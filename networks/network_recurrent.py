@@ -4,7 +4,7 @@ import torch.nn as nn
 from torch.nn import Sequential, Linear, ReLU, LayerNorm
 
 from torch_geometric.nn import MessagePassing
-from torch_geometric.nn import remove_self_loop, add_self_loop
+from torch_geometric.utils import remove_self_loops, add_self_loops
 
 
 
@@ -33,7 +33,7 @@ class ProcessorLayer(MessagePassing):
             LayerNorm( out_channels)
         )
         self.edge_mlp = Sequential(
-            Linear( 3*in_channels, out_channels),
+            Linear( 4*in_channels, out_channels),
             ReLU(),
             Linear( out_channels, out_channels),
             LayerNorm( out_channels)
@@ -50,7 +50,7 @@ class ProcessorLayer(MessagePassing):
         self.edge_mlp[0].reset_parameters()
         self.edge_mlp[2].reset_parameters()
     
-    def forward(self, x, edge_index, edge_attr, size = None):
+    def forward(self, x, edge_index, edge_attr, hidden, size = None):
         '''
         pre and post-process node features->embeddings
         message passing (propagate)
@@ -59,8 +59,8 @@ class ProcessorLayer(MessagePassing):
         edge_index: [2, edge_num]
         edge_attr: [edge_num, in_channels]
         '''
-
-        out, updated_edges = self.propagate(edge_index, x = x, edge_attr = edge_attr, size = size)
+        out, updated_edges = self.propagate(edge_index, x = x, \
+                    edge_attr = edge_attr, hidden = hidden, size = size)
 
         updated_nodes = torch.cat([x, out], dim=1)
 
@@ -68,47 +68,45 @@ class ProcessorLayer(MessagePassing):
             updated_nodes = x + self.node_mlp(updated_nodes)
         else:
             updated_nodes = self.node_mlp(updated_nodes)
-
         return updated_nodes, updated_edges
     
-    def message(self, x_i, x_j, edge_attr):
-        updated_edges = torch.cat([x_i, x_j, edge_attr], dim=1)
+    def message(self, x_i, x_j, edge_attr, hidden):
+        updated_edges = torch.cat([x_i, x_j, edge_attr, hidden], dim=1)
         if self.use_residual:
             updated_edges = edge_attr + self.edge_mlp(updated_edges)
         else:
             updated_edges = self.edge_mlp(updated_edges)
-        
         return updated_edges
     
     def aggregate(self, updated_edges, edge_index, dim_size = None):
-        out = torch_scatter.scatter(updated_edges, edge_index[0,:], dim=0, reduce = self.aggregate_type)
-
+        out = torch_scatter.scatter(updated_edges, edge_index[1,:], dim=0, reduce = self.aggregate_type)
         return out, updated_edges
 
 
 #####################################################################
 class RecurrentProcessorCell(nn.Module):
-    def __init__(self, in_channels, out_channels, num_processors, use_residual = True, 
+    def __init__(self, in_channels, out_channels, n_processors, use_residual = True, 
                 aggregate_type = 'sum', **kwargs) -> None:
         super(RecurrentProcessorCell, self).__init__()
-        self.num_processors = num_processors
+        self.n_processors = n_processors
 
         self.processor = nn.ModuleList()
-        assert (self.num_processors >= 1), 'Number of message passing layer is not >= 1'
+        assert (self.n_processors >= 1), 'Number of message passing layer is not >= 1'
 
-        for _ in range(self.num_processors):
+        for _ in range(self.n_processors):
             self.processor.append(ProcessorLayer(in_channels, out_channels,
                                                 use_residual, aggregate_type))
         
         self.reset_parameters()
     
     def reset_parameters(self):
-        for i in range(self.num_processors):
+        for i in range(self.n_processors):
             self.processor[i].reset_parameters()
     
-    def forward(self, x, edge_index, edge_attr):
-        for i in range(self.num_processors):
-            x, edge_attr = self.processor[i](x, edge_index, edge_attr)
+    def forward(self, x, edge_index, edge_attr, hidden):
+
+        for i in range(self.n_processors):
+            x, edge_attr = self.processor[i](x, edge_index, edge_attr, hidden)
         return x, edge_attr
 
 
@@ -116,9 +114,9 @@ class RecurrentProcessorCell(nn.Module):
 #####################################################################
 class RecurrentMeshGraphNet(nn.Module):
     def __init__(self, input_dim_node, input_dim_edge, output_dim_node, output_dim_edge,
-                hidden_dim, num_processors, use_processor_residual=True, 
+                hidden_dim, n_processors, use_processor_residual=True, 
                 aggregate_type='sum', emb=False):
-
+        super(RecurrentMeshGraphNet, self).__init__()
         self.node_encoder = Sequential(
             Linear(input_dim_node, hidden_dim),
             ReLU(),
@@ -133,7 +131,7 @@ class RecurrentMeshGraphNet(nn.Module):
              LayerNorm(hidden_dim)
         )
 
-        self.processor = RecurrentProcessorCell(hidden_dim, hidden_dim, num_processors,
+        self.processor = RecurrentProcessorCell(hidden_dim, hidden_dim, n_processors,
                                                 use_processor_residual, aggregate_type)
         
         self.node_decoder = Sequential(
@@ -148,9 +146,13 @@ class RecurrentMeshGraphNet(nn.Module):
             Linear(hidden_dim, output_dim_edge)
         )
 
-    def forward(self, x, edge_index, edge_attr):
+    def forward(self, x, edge_index, edge_attr, hidden):
+        batch_size = edge_attr.size(0)
+
         hidden_x = self.node_encoder(x)
         hidden_edge_attr = self.edge_encoder(edge_attr)
-        hidden_x, hidden_edge_attr = self.processor(hidden_x, edge_index, hidden_edge_attr)
+
+        hidden_x, hidden_edge_attr = self.processor(hidden_x, edge_index, \
+                                    hidden_edge_attr, hidden)
         return self.node_decoder(hidden_x), self.edge_decoder(hidden_edge_attr), \
                 hidden_edge_attr
