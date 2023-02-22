@@ -6,7 +6,7 @@ import networkx as nx
 import nxmetis
 
 
-def metis_batching_torch(data : TorchGraphData, relative_batch_size : int = 100, recursive : bool = False):
+def spatial_batching_torch(data : TorchGraphData, relative_batch_size : int = 100, recursive : bool = False):
     num_batch = int(data.num_nodes / relative_batch_size)
     
     (_, parts) = nxmetis.partition(
