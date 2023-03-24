@@ -3,18 +3,17 @@ import numpy as np
 
 def read_1D_input(
         file_name : str,
-        # var_dict = {
-        #     'x' : ['x_end', 'y_end', 'z_end'], 
-        #     'edge_index' : ['PareID', 'ID'], 
-        #     'edge_attr' : ['Length', 'Diameter', 'Gene', 'Lobe', 'Vol1-0', 'Vol0', 'Vol1', 'Flag']
-        # },
         var_dict = {
-            'node_attr' : ['x_end', 'y_end', 'z_end'],
-            'edge_index' : ['PareID', 'ID'],
-            'edge_attr' : ['Length', 'Diameter', 'Gene', 'Lobe', 'Vol0', 'Vol1', 'Flag'],
-            'diam' : ['Diameter']
+            'node_attr' : ['x_end', 'y_end', 'z_end'], 
+            'edge_index' : ['PareID', 'ID'], 
+            'edge_attr' : ['Length', 'Diameter', 'Gene', 'Lobe', 'Flag', 'Vol0', 'Vol1']
         },
-        log : bool = True,
+        # var_dict = {
+        #     'node_attr' : ['x_end', 'y_end', 'z_end'],
+        #     'edge_index' : ['PareID', 'ID'],
+        #     'edge_attr' : ['Length', 'Diameter', 'Gene', 'Lobe', 'Flag'],
+        #     'vol' : ['Vol0', 'Vol1']
+        # }
     ):
     r"""Read Output_subject_Amount_St_whole.dat
     Data format
@@ -24,6 +23,7 @@ def read_1D_input(
     (---------information of ith branch----------)
     -  -      -      -        ... -      -    -
     """
+    # print(var_dict)
     def _float(str):
         _dict = {'C':0, 'P':1, 'E':2, 'G':3, 'T':4}
         try:
@@ -62,11 +62,11 @@ def read_1D_input(
     data_dict['y_end'] = np.insert(data_dict['y_end'], 0, data_dict['y_start'][0])
     data_dict['z_end'] = np.insert(data_dict['z_end'], 0, data_dict['z_start'][0])
 
-    # Scaling data
-    if log:
-        data_dict['Vol0'] = np.log(data_dict['Vol0'] + 1e-9) 
-        data_dict['Vol1'] = np.log(data_dict['Vol1'] + 1e-9) 
-        # data_dict['Vol1-0'] = np.log(data_dict['Vol1-0'] + 1e-9) 
+    # Scaling data - cubic root of volume
+    if data_dict['Vol0'] is not None:
+        data_dict['Vol0'] = np.cbrt(data_dict['Vol0']) 
+    if data_dict['Vol1'] is not None:
+        data_dict['Vol1'] = np.cbrt(data_dict['Vol1']) 
 
     out_dict = {}
     for var in var_dict:
@@ -77,7 +77,7 @@ def read_1D_input(
     out_dict['node_attr'] = np.array(out_dict['node_attr'], dtype=np.float32).transpose()
     out_dict['edge_index'] = np.array(out_dict['edge_index'], dtype=np.int32)
     out_dict['edge_attr'] = np.array(out_dict['edge_attr'], dtype=np.float32).transpose()
-    out_dict['diam'] = np.array(out_dict['diam'], dtype=np.float32).transpose()
+    # out_dict['vol'] = np.array(out_dict['vol'], dtype=np.float32).transpose()
     return out_dict
 
 def read_1D_output(
