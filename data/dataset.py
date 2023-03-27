@@ -33,7 +33,7 @@ class DatasetLoader(Dataset):
         if self._data_names == 'all':
             data_dir = self.root + self._sub_dir
             data_names = os.listdir(data_dir)
-            _filter = lambda s : not s in ['pre_filter.pt', 'pre_transform.pt']
+            _filter = lambda s : not s in ['pre_filter.pt', 'pre_transform.pt', 'batched_id.pt']
             data_names = list(filter(_filter, data_names))
             return [data.replace('.pt','',data.count('.pt')) for data in data_names]
         else:
@@ -128,18 +128,27 @@ class OneDDatasetLoader(DatasetLoader):
         self._clean_sub_dir(sub_dir=sub_dir)
         os.system(f'mkdir {self.root}{sub_dir}')
         batched_dataset = []
+        batched_dataset_id = []
         for i in range(self.len()):
-            batched_dataset += get_batch_graphs(
+            batched_data = get_batch_graphs(
                 data=self.__getitem__(i),
                 batch_size=batch_size,
                 batch_n_times=batch_n_times,
                 recursive=recursive
             )
+            batched_dataset += batched_data
+            batched_dataset_id += [i]*len(batched_data)
+            
         for i in range(len(batched_dataset)):
             torch.save(batched_dataset[i], f'{self.root}{sub_dir}/batched_data_{i}.pt')
-            print(f'{self.root}{sub_dir}batched_data_{i}.pt')
+            # print(f'{self.root}{sub_dir}batched_data_{i}.pt')
+        
+        torch.save(torch.tensor(batched_dataset_id), f'{self.root}{sub_dir}/batched_id.pt')
         return OneDDatasetLoader(root_dir=self.root, sub_dir=sub_dir)
     
+    def get_batching_id(self, sub_dir='/batched/'):
+        return torch.load(f'{self.root}{sub_dir}/batched_id.pt')
+
     def _clean_sub_dir(self, sub_dir='/batched/'):
         if sub_dir == '' or sub_dir == '/':
             print('Unable to clear root folder!')

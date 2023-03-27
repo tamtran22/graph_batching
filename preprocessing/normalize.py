@@ -36,21 +36,29 @@ def normalize_data_1d(data, **kwargs):
     kwargs = objectview(kwargs)
     
     # x
-    x = min_max_scaler(data.x, min=kwargs.x_min, max=kwargs.x_max)
+    x = data.x
+    if hasattr(kwargs, 'x_min') and hasattr(kwargs, 'x_max'):
+        x = min_max_scaler(x, min=kwargs.x_min, max=kwargs.x_max)
 
     # edge_index
     edge_index = data.edge_index
 
     # edge_attr
-    edge_attr = min_max_scaler(data.edge_attr, min=kwargs.ea_min,
+    edge_attr = data.edge_attr
+    if hasattr(kwargs, 'ea_min') and hasattr(kwargs, 'ea_max'):
+        edge_attr = min_max_scaler(edge_attr, min=kwargs.ea_min,
                             max=kwargs.ea_max)
     
     # pressure
-    pressure = min_max_scaler(data.pressure, min=kwargs.p_min,
+    pressure = data.pressure
+    if hasattr(kwargs, 'p_min') and hasattr(kwargs, 'p_max'):
+        pressure = min_max_scaler(pressure, min=kwargs.p_min,
                             max=kwargs.p_max)
 
     # velocity
-    velocity = min_max_scaler(data.velocity, min=kwargs.u_min,
+    velocity = data.velocity
+    if hasattr(kwargs, 'u_min') and hasattr(kwargs, 'u_max'):
+        velocity = min_max_scaler(velocity, min=kwargs.u_min,
                             max=kwargs.u_max)
 
     # flowrate bc
@@ -60,9 +68,23 @@ def normalize_data_1d(data, **kwargs):
     n_edge = data.flowrate.size(0)
     flowrate_bc = [flowrate_bc.unsqueeze(0)] * n_edge
     flowrate_bc = torch.cat(flowrate_bc, dim=0)
+
+    # loss weight by diameter
+    weight = cal_weight(x = edge_attr[:,0], bins=100)
+
     return TorchGraphData(x=x,edge_index=edge_index,edge_attr=edge_attr,
                         pressure=pressure, velocity=velocity,
-                        flowrate_bc = flowrate_bc)
+                        flowrate_bc = flowrate_bc, weight=weight)
+
+def cal_weight(x : np.array, bins=1000) -> np.array:
+    (count, bin) = np.histogram(x, bins=bins)
+    N = x.shape[0]
+    def _weight(value : float):
+        _bin_id = np.where(bin >= value)[0][0] - 1
+        _weight = 1. / max(count[_bin_id], 1.)
+        return _weight
+    v_weight = np.vectorize(_weight)
+    return v_weight(x)
 
 if __name__ == '__main__':
     # x = Tensor([[1,2], [4,13], [4, 3]])
