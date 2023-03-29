@@ -50,31 +50,43 @@ def normalize_data_1d(data, **kwargs):
                             max=kwargs.ea_max)
     
     # pressure
-    pressure = data.pressure
-    if hasattr(kwargs, 'p_min') and hasattr(kwargs, 'p_max'):
-        pressure = min_max_scaler(pressure, min=kwargs.p_min,
-                            max=kwargs.p_max)
+    pressure = None
+    if hasattr(data, 'pressure'):
+        pressure = data.pressure
+        if hasattr(kwargs, 'p_min') and hasattr(kwargs, 'p_max'):
+            pressure = min_max_scaler(pressure, min=kwargs.p_min,
+                                max=kwargs.p_max)
 
     # velocity
-    velocity = data.velocity
-    if hasattr(kwargs, 'u_min') and hasattr(kwargs, 'u_max'):
-        velocity = min_max_scaler(velocity, min=kwargs.u_min,
-                            max=kwargs.u_max)
+    velocity = None
+    if hasattr(data, 'velocity'):
+        velocity = data.velocity
+        if hasattr(kwargs, 'u_min') and hasattr(kwargs, 'u_max'):
+            velocity = min_max_scaler(velocity, min=kwargs.u_min,
+                                max=kwargs.u_max)
+    
+    # flowrate
+    flowrate = None
+    if hasattr(data, 'flowrate'):
+        flowrate = data.flowrate
+        if hasattr(kwargs, 'q_min') and hasattr(kwargs, 'q_max'):
+            flowrate = min_max_scaler(flowrate, min=kwargs.q_min,
+                                max=kwargs.q_max)
 
     # flowrate bc
-    flowrate_bc = data.flowrate[0,:] # Fixed flowrate bc at entrance
+    # flowrate_bc = data.flowrate[0,:] # Fixed flowrate bc at entrance
     # flowrate_bc = min_max_scaler(flowrate_bc, min=flowrate_bc.min(),
     #                              max=flowrate_bc.max())
-    n_edge = data.flowrate.size(0)
-    flowrate_bc = [flowrate_bc.unsqueeze(0)] * n_edge
-    flowrate_bc = torch.cat(flowrate_bc, dim=0)
+    # n_edge = data.flowrate.size(0)
+    # flowrate_bc = [flowrate_bc.unsqueeze(0)] * n_edge
+    # flowrate_bc = torch.cat(flowrate_bc, dim=0)
 
     # loss weight by diameter
-    weight = cal_weight(x = edge_attr[:,0], bins=100)
+    # weight = cal_weight(x = edge_attr[:,0], bins=100)
+    # weight = torch.tensor(weight)
 
     return TorchGraphData(x=x,edge_index=edge_index,edge_attr=edge_attr,
-                        pressure=pressure, velocity=velocity,
-                        flowrate_bc = flowrate_bc, weight=weight)
+                        pressure=pressure, flowrate=flowrate, velocity=velocity)
 
 def cal_weight(x : np.array, bins=1000) -> np.array:
     (count, bin) = np.histogram(x, bins=bins)

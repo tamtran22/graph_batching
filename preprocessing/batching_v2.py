@@ -16,61 +16,57 @@ def _get_graph_partition(data : TorchGraphData, partition : np.array, recursive 
     partition_edge_id = np.argwhere(partition_edge_mark == True).squeeze(1)
     partition_edge_index = edge_index[:,partition_edge_id]
 
-    partition = np.unique(np.concatenate(partition_edge_index))
+    _partition = partition
+    partition = np.unique(np.concatenate(list(partition_edge_index) + [_partition]))
     index = lambda n : list(partition).index(n)
-    v_index = np.vectorize(index)
+    v_index = np.vectorize(index) # transform global node id to partition node id
     
-    partition_edge_index = torch.tensor(v_index(partition_edge_index))
+    if partition_edge_index.shape[1] > 0:
+        partition_edge_index = torch.tensor(v_index(partition_edge_index))
     
     partition_x = data.x[partition]
 
     partition_edge_attr = data.edge_attr[partition_edge_id]
 
-    partition_pressure = data.pressure[partition]
+    partition_pressure = None
+    if hasattr(data, 'pressure'):
+        partition_pressure = data.pressure[partition]
 
-    partition_velocity = data.velocity[partition_edge_id]
-
-    if 'flowrate' in data._store:
+    partition_flowrate = None
+    if hasattr(data, 'flowrate'):
         partition_flowrate = data.flowrate[partition_edge_id]
-        return TorchGraphData(
-            x = partition_x,
-            edge_index = partition_edge_index,
-            edge_attr = partition_edge_attr,
-            pressure = partition_pressure,
-            flowrate = partition_flowrate,
-            velocity = partition_velocity
-        )
+
+    partition_velocity = None
+    if hasattr(data, 'velocity'):
+        partition_velocity = data.velocity[partition_edge_id]
+
+    if recursive:
+        partition_node_mark = np.zeros_like(partition)
+        partition_node_mark[v_index(_partition)] = 1
+    else:
+        partition_node_mark = np.ones_like(partition)
+    partition_node_mark = torch.tensor(partition_node_mark)
     
-    if 'flowrate_bc' in data._store:
-        partition_flowrate_bc = data.flowrate_bc[partition_edge_id]
-        return TorchGraphData(
-            x = partition_x,
-            edge_index = partition_edge_index,
-            edge_attr = partition_edge_attr,
-            pressure = partition_pressure,
-            flowrate_bc = partition_flowrate_bc,
-            velocity = partition_velocity
-        )
+
+    return TorchGraphData(
+        x = partition_x,
+        edge_index = partition_edge_index,
+        edge_attr = partition_edge_attr,
+        pressure = partition_pressure,
+        flowrate = partition_flowrate,
+        velocity = partition_velocity, 
+        mark = partition_node_mark
+    )
     
 def _get_time_partition(data : TorchGraphData, time_id : np.array):
-    if 'flowrate' in data._store:
-        return TorchGraphData(
-            x = data.x,
-            edge_index = data.edge_index,
-            edge_attr = data.edge_attr,
-            pressure = data.pressure[:,time_id],
-            flowrate = data.flowrate[:,time_id],
-            velocity = data.velocity[:,time_id]
-        )
-    if 'flowrate_bc' in data._store:
-        return TorchGraphData(
-            x = data.x,
-            edge_index = data.edge_index,
-            edge_attr = data.edge_attr,
-            pressure = data.pressure[:,time_id],
-            flowrate_bc = data.flowrate_bc[:,time_id],
-            velocity = data.velocity[:,time_id]
-        )
+    return TorchGraphData(
+        x = data.x,
+        edge_index = data.edge_index,
+        edge_attr = data.edge_attr,
+        pressure = data.pressure[:,time_id],
+        flowrate = data.flowrate[:,time_id],
+        velocity = data.velocity[:,time_id]
+    )
 
 def get_batch_graphs(data : TorchGraphData, batch_size : int, batch_n_times : int, 
                     recursive : bool):

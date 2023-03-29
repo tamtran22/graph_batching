@@ -141,7 +141,6 @@ class OneDDatasetLoader(DatasetLoader):
             
         for i in range(len(batched_dataset)):
             torch.save(batched_dataset[i], f'{self.root}{sub_dir}/batched_data_{i}.pt')
-            # print(f'{self.root}{sub_dir}batched_data_{i}.pt')
         
         torch.save(torch.tensor(batched_dataset_id), f'{self.root}{sub_dir}/batched_id.pt')
         return OneDDatasetLoader(root_dir=self.root, sub_dir=sub_dir)
@@ -154,6 +153,9 @@ class OneDDatasetLoader(DatasetLoader):
             print('Unable to clear root folder!')
         else:
             os.system(f'rm -rf {self.root}{sub_dir}')
+
+    def normalizing(self):
+        pass
 
 
 
