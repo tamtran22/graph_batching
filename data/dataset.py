@@ -5,13 +5,35 @@ from torch_geometric.data import Dataset
 from data.data import TorchGraphData
 from typing import Optional, Callable, Union, List, Tuple
 from data.file_reader import *
-from preprocessing.batching_v2 import get_batch_graphs
+from preprocessing.batching import get_batch_graphs, merge_graphs
+from preprocessing.normalize import normalize_graph, calculate_weight
+from data.file_reader import edge_to_node
+
+
+
 
 
 class DatasetLoader(Dataset):
     r"""Base dataset loader class for graph data
     Loader is specifically used for loading a processed dataset.
     Function 'process()' is not implemented.
+
+    --properties--
+    root_dir : original folder to store dataset.
+    _sub_dir : subfolder which stored data for different types of processed data
+                '/processed' : original processed datas read by builder.
+                '/normalized' : normalized datas (process described in function).
+                '/batched' : batched datas which are divided by graph partitioning
+                            time step slicing.
+    data_names : list of all subject's names, subject's data may be 
+                contained in multiple files.
+    processed_file_names : list of all processed subject's names, each 
+                subject's data is contained in 1 file (.pt).
+    len() : number of subjects.
+
+
+    --methods--
+    __getitem__(index) : return data with given index.
     """
     def __init__(self, 
         root_dir: Optional[str] = None, 
@@ -23,7 +45,7 @@ class DatasetLoader(Dataset):
     ):
         self._data_names = data_names
         if sub_dir is None:
-            self._sub_dir = '/processed/'
+            self._sub_dir = '/processed'
         else:
             self._sub_dir = sub_dir
         super().__init__(root_dir, transform, pre_transform, pre_filter)
@@ -31,9 +53,9 @@ class DatasetLoader(Dataset):
     @property
     def data_names(self) -> Union[List[str], Tuple]:
         if self._data_names == 'all':
-            data_dir = self.root + self._sub_dir
+            data_dir = self.root + self._sub_dir + '/'
             data_names = os.listdir(data_dir)
-            _filter = lambda s : not s in ['pre_filter.pt', 'pre_transform.pt', 'batched_id.pt']
+            _filter = lambda s : not s in ['pre_filter.pt', 'pre_transform.pt', 'batched_id.pt', 'batched_info.pt']
             data_names = list(filter(_filter, data_names))
             return [data.replace('.pt','',data.count('.pt')) for data in data_names]
         else:
@@ -41,7 +63,7 @@ class DatasetLoader(Dataset):
 
     @property
     def processed_file_names(self) -> Union[List[str], Tuple]:
-        return [self.root+self._sub_dir+data+'.pt' 
+        return [self.root+self._sub_dir+'/'+data+'.pt' 
                                 for data in self.data_names]
 
     def process(self):
@@ -54,9 +76,26 @@ class DatasetLoader(Dataset):
         return torch.load(self.processed_file_names[index])
 
 
+
+
+
 class OneDDatasetLoader(DatasetLoader):
     r"""
-    aaaaaa
+    Loader and pre-processing for OneD dataset.
+
+    --properties--
+    batching_id : mapping batched index to original index (for batched dataset).
+
+    --methods--
+    min() : return minimum of a variable on whole dataset.
+    max() : return maximum of a variable on whole dataset.
+    mean() : return mean of a variable on whole dataset.
+    std() : return standard deviation of a variable on whole dataset.
+    batching() : perform batching for all datas in dataset and return the 
+                batched dataset.
+    _clean_sub_dir : clear a subfolder.
+    normalizing() : perform normalizing for all datas in dataset and return 
+                the normalized dataset.
     """
     def __init__(self,
         root_dir: Optional[str] = None, 
@@ -124,7 +163,7 @@ class OneDDatasetLoader(DatasetLoader):
             else:
                 return var.std(axis=axis)
         
-    def batching(self, batch_size : int, batch_n_times : int, recursive : bool, sub_dir='/processed/'):
+    def batching(self, batch_size : int, batch_n_times : int, recursive : bool, sub_dir='/batched'):
         self._clean_sub_dir(sub_dir=sub_dir)
         os.system(f'mkdir {self.root}{sub_dir}')
         batched_dataset = []
@@ -143,19 +182,64 @@ class OneDDatasetLoader(DatasetLoader):
             torch.save(batched_dataset[i], f'{self.root}{sub_dir}/batched_data_{i}.pt')
         
         torch.save(torch.tensor(batched_dataset_id), f'{self.root}{sub_dir}/batched_id.pt')
+        torch.save({'batch_size' : batch_size, 'batch_n_times':batch_n_times}, f'{self.root}{sub_dir}/batched_info.pt')
         return OneDDatasetLoader(root_dir=self.root, sub_dir=sub_dir)
     
-    def get_batching_id(self, sub_dir='/batched/'):
-        return torch.load(f'{self.root}{sub_dir}/batched_id.pt')
+    @property
+    def batching_id(self, sub_dir='/batched'):
+        try:
+            return torch.load(f'{self.root}{sub_dir}/batched_id.pt')
+        except:
+            return torch.tensor(0)
 
-    def _clean_sub_dir(self, sub_dir='/batched/'):
+    def _clean_sub_dir(self, sub_dir='/batched'):
         if sub_dir == '' or sub_dir == '/':
             print('Unable to clear root folder!')
         else:
-            os.system(f'rm -rf {self.root}{sub_dir}')
+            os.system(f'rm -rf {self.root}{sub_dir}/')
 
-    def normalizing(self):
+    def normalizing(self, sub_dir='/normalized/'):
+        self._clean_sub_dir(sub_dir=sub_dir)
+        os.system(f'mkdir {self.root}{sub_dir}')
+        # Calculate normalize params
+        pressure_min = self.min('pressure')
+        pressure_max = self.max('pressure')
+        velocity_min = self.min('velocity')
+        velocity_max = self.max('velocity')
+        edge_attr_min = self.min('edge_attr', axis=0)
+        edge_attr_max = self.max('edge_attr', axis=0)
+        vol0_min = edge_attr_min[-2]
+        vol1_min = edge_attr_min[-1]
+        vol0_max = edge_attr_max[-2]
+        vol1_max = edge_attr_max[-1]
+        edge_attr_min[-2] = min(vol0_min, vol1_min)
+        edge_attr_min[-1] = min(vol0_min, vol1_min)
+        edge_attr_max[-2] = max(vol0_max, vol1_max)
+        edge_attr_max[-1] = max(vol0_max, vol1_max)
+        # Normalize
+        file_names = [f'{data_name}.pt' for data_name in self.data_names]
+        for i in range(self.len()):
+            # print(f'Dataset {i}')
+            normalized_data = normalize_graph(
+                data=self.__getitem__(i),
+                edge_attr_min=edge_attr_min, edge_attr_max=edge_attr_max,
+                pressure_min=pressure_min, pressure_max=pressure_max,
+                velocity_min=velocity_min, velocity_max=velocity_max
+            )
+            # adding weight
+            edge_weight = calculate_weight(x=normalized_data.edge_attr[:,0], bins=100)
+            setattr(normalized_data, 'edge_weight', torch.tensor(edge_weight, dtype=torch.float32))
+            node_weight = edge_to_node(edge_weight, normalized_data.edge_index.numpy())
+            setattr(normalized_data, 'node_weight', torch.tensor(node_weight, dtype=torch.float32))
+
+            torch.save(normalized_data, f'{self.root}{sub_dir}/{file_names[i]}')
+        return OneDDatasetLoader(root_dir=self.root, sub_dir=sub_dir)
+    
+    def add_weight(self, var_name:str = 'edge_attr', dim : int = 0):
         pass
+
+
+        
 
 
 
@@ -185,6 +269,8 @@ class DatasetBuilder(Dataset):
     def process(self):
         # Write code for data processing here.
         raise NotImplemented
+
+
 
 
 

@@ -156,3 +156,15 @@ class RecurrentMeshGraphNet(nn.Module):
                                     hidden_edge_attr, hidden)
         return self.node_decoder(hidden_x), self.edge_decoder(hidden_edge_attr), \
                 hidden_edge_attr
+    
+
+###################################################################
+class RecurrentBlock(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+
+    def forward(self, x):
+        pass
+
+    def recurrent_formulation(self, x_init, n_formulations):
+        pass
