@@ -167,7 +167,7 @@ def get_batch_graphs(data : TorchGraphData, batch_size : int = None, batch_n_tim
 
 
 
-def BFS_partition(edge_index, partition_size=None, n_partitions=None, threshold=0.0) -> List[List[int]]:
+def BFS_partition(edge_index, partition_size=None, n_partitions=None, threshold=0.3) -> List[List[int]]:
     '''
     Perform breath first search to partition a graph(given by edge index).
     '''

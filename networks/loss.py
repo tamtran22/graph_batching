@@ -14,4 +14,4 @@ class WeightedMSELoss(_Loss):
                 reduce=None, reduction: str = 'mean') -> None:
         super().__init__(size_average, reduce, reduction)
     def forward(self, input : Tensor, target : Tensor, weight : Tensor):
-        return weighted_mean_squared_error(input, target, weight=weight)
+        return weighted_mean_squared_error(input, target, weight)

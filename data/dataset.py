@@ -55,7 +55,8 @@ class DatasetLoader(Dataset):
         if self._data_names == 'all':
             data_dir = self.root + self._sub_dir + '/'
             data_names = os.listdir(data_dir)
-            _filter = lambda s : not s in ['pre_filter.pt', 'pre_transform.pt', 'batched_id.pt', 'batched_info.pt']
+            _filter = lambda s : not s in ['pre_filter.pt', 'pre_transform.pt', \
+                                           'batched_id.pt', 'batched_info.pt']
             data_names = list(filter(_filter, data_names))
             return [data.replace('.pt','',data.count('.pt')) for data in data_names]
         else:
@@ -93,7 +94,7 @@ class OneDDatasetLoader(DatasetLoader):
     std() : return standard deviation of a variable on whole dataset.
     batching() : perform batching for all datas in dataset and return the 
                 batched dataset.
-    _clean_sub_dir : clear a subfolder.
+    _clean_sub_dir() : clear a subfolder.
     normalizing() : perform normalizing for all datas in dataset and return 
                 the normalized dataset.
     """
@@ -164,6 +165,12 @@ class OneDDatasetLoader(DatasetLoader):
                 return var.std(axis=axis)
         
     def batching(self, batch_size : int, batch_n_times : int, recursive : bool, sub_dir='/batched'):
+        ''' Perform batching and return batched dataset.
+        batch_size : approximate size of sub-graph datas.
+        batch_n_times : number of timesteps in sub-graph datas.
+        recursive : indicator to partition recursive sub-graphs.
+        sub_dir : sub folder to store batched dataset.
+        '''
         self._clean_sub_dir(sub_dir=sub_dir)
         os.system(f'mkdir {self.root}{sub_dir}')
         batched_dataset = []
@@ -187,18 +194,30 @@ class OneDDatasetLoader(DatasetLoader):
     
     @property
     def batching_id(self, sub_dir='/batched'):
+        ''' Map batched data index which is stored in batched dataset to original 
+        data index which is stored in raw processed dataset.
+        In case of dataset is batched (_sub_dir==/batched), return an array which index is
+        the index of batched data (in data_names) and value is the index of parrent data.
+        In case of dataset is not batched, return zero tensor.
+
+        '''
         try:
             return torch.load(f'{self.root}{sub_dir}/batched_id.pt')
         except:
             return torch.tensor(0)
 
     def _clean_sub_dir(self, sub_dir='/batched'):
+        ''' Clear the sub folder to store new processed data.
+        '''
         if sub_dir == '' or sub_dir == '/':
             print('Unable to clear root folder!')
         else:
             os.system(f'rm -rf {self.root}{sub_dir}/')
 
     def normalizing(self, sub_dir='/normalized/'):
+        ''' Perform normalizing and return normalized dataset.
+        sub_dir : sub folder to store normalized dataset.
+        '''
         self._clean_sub_dir(sub_dir=sub_dir)
         os.system(f'mkdir {self.root}{sub_dir}')
         # Calculate normalize params
@@ -227,16 +246,13 @@ class OneDDatasetLoader(DatasetLoader):
                 velocity_min=velocity_min, velocity_max=velocity_max
             )
             # adding weight
-            edge_weight = calculate_weight(x=normalized_data.edge_attr[:,0], bins=100)
+            edge_weight = calculate_weight(x=normalized_data.edge_attr[:,0], bins=10000)
             setattr(normalized_data, 'edge_weight', torch.tensor(edge_weight, dtype=torch.float32))
             node_weight = edge_to_node(edge_weight, normalized_data.edge_index.numpy())
             setattr(normalized_data, 'node_weight', torch.tensor(node_weight, dtype=torch.float32))
 
             torch.save(normalized_data, f'{self.root}{sub_dir}/{file_names[i]}')
         return OneDDatasetLoader(root_dir=self.root, sub_dir=sub_dir)
-    
-    def add_weight(self, var_name:str = 'edge_attr', dim : int = 0):
-        pass
 
 
         

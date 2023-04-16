@@ -58,9 +58,9 @@ def read_1D_input(
         data_dict[vars[i]] = _vectorized_float(data[i])
     
     # Rearange data
-    data_dict['x_end'] = np.insert(data_dict['x_end'], 0, data_dict['x_start'][0])
-    data_dict['y_end'] = np.insert(data_dict['y_end'], 0, data_dict['y_start'][0])
-    data_dict['z_end'] = np.insert(data_dict['z_end'], 0, data_dict['z_start'][0])
+    # data_dict['x_end'] = np.insert(data_dict['x_end'], 0, data_dict['x_start'][0])
+    # data_dict['y_end'] = np.insert(data_dict['y_end'], 0, data_dict['y_start'][0])
+    # data_dict['z_end'] = np.insert(data_dict['z_end'], 0, data_dict['z_start'][0])
 
     # Scaling data - cubic root of volume
     if data_dict['Vol0'] is not None:
@@ -73,11 +73,10 @@ def read_1D_input(
         out_dict[var] = []
         for data_var in var_dict[var]:
             out_dict[var].append(data_dict[data_var])
-
-    out_dict['node_attr'] = np.array(out_dict['node_attr'], dtype=np.float32).transpose()
     out_dict['edge_index'] = np.array(out_dict['edge_index'], dtype=np.int32)
+    out_dict['node_attr'] = edge_to_node(np.array(out_dict['node_attr'], dtype=np.float32).transpose(), 
+                                        out_dict['edge_index'])
     out_dict['edge_attr'] = np.array(out_dict['edge_attr'], dtype=np.float32).transpose()
-    # out_dict['vol'] = np.array(out_dict['vol'], dtype=np.float32).transpose()
     return out_dict
 
 def read_1D_output(
@@ -146,8 +145,8 @@ def read_1D_output(
     for var in var_dict:
         out_dict[var] = np.concatenate(out_dict[var], axis=-1)
     edge_index = np.array(edge_index, dtype = np.int32).reshape((n_edge, 2)).transpose() - 1
-    if out_dict['flowrate'] is not None:
-        out_dict['flowrate'] = node_to_edge(out_dict['flowrate'], edge_index)
+    # if out_dict['flowrate'] is not None:
+    #     out_dict['flowrate'] = node_to_edge(out_dict['flowrate'], edge_index)
     return out_dict
 
 def node_to_edge(node_attr, edge_index):
