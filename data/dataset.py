@@ -7,7 +7,6 @@ from typing import Optional, Callable, Union, List, Tuple
 from data.file_reader import *
 from preprocessing.batching import get_batch_graphs, merge_graphs
 from preprocessing.normalize import normalize_graph, calculate_weight
-from data.file_reader import edge_to_node
 
 
 
@@ -225,30 +224,49 @@ class OneDDatasetLoader(DatasetLoader):
         pressure_max = self.max('pressure')
         velocity_min = self.min('velocity')
         velocity_max = self.max('velocity')
-        edge_attr_min = self.min('edge_attr', axis=0)
-        edge_attr_max = self.max('edge_attr', axis=0)
-        vol0_min = edge_attr_min[-2]
-        vol1_min = edge_attr_min[-1]
-        vol0_max = edge_attr_max[-2]
-        vol1_max = edge_attr_max[-1]
-        edge_attr_min[-2] = min(vol0_min, vol1_min)
-        edge_attr_min[-1] = min(vol0_min, vol1_min)
-        edge_attr_max[-2] = max(vol0_max, vol1_max)
-        edge_attr_max[-1] = max(vol0_max, vol1_max)
+
+        # Cases with edge attributes
+        # edge_attr_min = self.min('edge_attr', axis=0)
+        # edge_attr_max = self.max('edge_attr', axis=0)
+        # vol0_min = edge_attr_min[-2]
+        # vol1_min = edge_attr_min[-1]
+        # vol0_max = edge_attr_max[-2]
+        # vol1_max = edge_attr_max[-1]
+        # edge_attr_min[-2] = min(vol0_min, vol1_min)
+        # edge_attr_min[-1] = min(vol0_min, vol1_min)
+        # edge_attr_max[-2] = max(vol0_max, vol1_max)
+        # edge_attr_max[-1] = max(vol0_max, vol1_max)
+
+        # Cases with node attributes
+        node_attr_min = self.min('node_attr', axis=0)
+        node_attr_max = self.max('node_attr', axis=0)
+        vol0_min = node_attr_min[-2]
+        vol1_min = node_attr_min[-1]
+        vol0_max = node_attr_max[-2]
+        vol1_max = node_attr_max[-1]
+        node_attr_min[-2] = min(vol0_min, vol1_min)
+        node_attr_min[-1] = min(vol0_min, vol1_min)
+        node_attr_max[-2] = max(vol0_max, vol1_max)
+        node_attr_max[-1] = max(vol0_max, vol1_max)
+
         # Normalize
         file_names = [f'{data_name}.pt' for data_name in self.data_names]
         for i in range(self.len()):
             # print(f'Dataset {i}')
             normalized_data = normalize_graph(
                 data=self.__getitem__(i),
-                edge_attr_min=edge_attr_min, edge_attr_max=edge_attr_max,
+                # edge_attr_min=edge_attr_min, edge_attr_max=edge_attr_max,
+                node_attr_min=node_attr_min, node_attr_max=node_attr_max,
                 pressure_min=pressure_min, pressure_max=pressure_max,
                 velocity_min=velocity_min, velocity_max=velocity_max
             )
             # adding weight
-            edge_weight = calculate_weight(x=normalized_data.edge_attr[:,0], bins=10000)
-            setattr(normalized_data, 'edge_weight', torch.tensor(edge_weight, dtype=torch.float32))
-            node_weight = edge_to_node(edge_weight, normalized_data.edge_index.numpy())
+            # edge_weight = calculate_weight(x=normalized_data.node_attr[:,0], bins=10000)
+            # setattr(normalized_data, 'edge_weight', torch.tensor(edge_weight, dtype=torch.float32))
+            # node_weight = edge_to_node(edge_weight, normalized_data.edge_index.numpy())
+            # setattr(normalized_data, 'node_weight', torch.tensor(node_weight, dtype=torch.float32))
+
+            node_weight = calculate_weight(x=normalized_data.node_attr[:,0], bins=10000)
             setattr(normalized_data, 'node_weight', torch.tensor(node_weight, dtype=torch.float32))
 
             torch.save(normalized_data, f'{self.root}{sub_dir}/{file_names[i]}')
@@ -321,13 +339,13 @@ class OneDDatasetBuilder(DatasetBuilder):
                                 for data in self.data_names]
 
     def process(self):
-
+        CFD_1D_dir = 'CFD_1D'
         # Output_subject_Amout_St_whole.dat
-        file_name_input = lambda subject : self.raw+'/'+subject+\
-            '/CFD_1D/Output_'+subject+'_Amount_St_whole.dat'
+        file_name_input = lambda subject : f'{self.raw}/{subject}'+\
+            f'/{CFD_1D_dir}/Output_{subject}_Amount_St_whole.dat'
         # data_plt_nd/plt_nd_000time.dat
-        file_name_output = lambda subject, time : self.raw+'/'+subject+\
-            '/CFD_1D/data_plt_nd/plt_nd_000'+time+'.dat'
+        file_name_output = lambda subject, time : f'{self.raw}/{subject}'+\
+            f'/{CFD_1D_dir}/data_plt_nd/plt_nd_000{time}.dat'
         for subject in self.data_names:
             print(f'Process subject number {self.data_names.index(subject)}, subject name : {subject}.')
             
@@ -336,16 +354,22 @@ class OneDDatasetBuilder(DatasetBuilder):
             file_name_outputs = [file_name_output(subject, time) for time in self.time_id]
             data_dict_output = read_1D_output(file_name_outputs)
 
-            diam = np.expand_dims(data_dict_input['edge_attr'][:,1], axis=1)
+            diam = np.expand_dims(data_dict_input['node_attr'][:,1], axis=1)
             data_dict_output['velocity'] = data_dict_output['flowrate'] / \
                         (np.pi * np.square(diam) / 4) # U = Q / A = Q / (pi*d^2/4)
 
             data = TorchGraphData(
-                x = torch.tensor(data_dict_input['node_attr']).type(torch.float32),
+                # x = torch.tensor(data_dict_input['node_attr']).type(torch.float32),
                 edge_index = torch.tensor(data_dict_input['edge_index']).type(torch.LongTensor),
-                edge_attr = torch.tensor(data_dict_input['edge_attr']).type(torch.float32),
+                node_attr = torch.tensor(data_dict_input['node_attr']).type(torch.float32),
                 pressure = torch.tensor(data_dict_output['pressure']).type(torch.float32),
                 flowrate = torch.tensor(data_dict_output['flowrate']).type(torch.float32),
                 velocity = torch.tensor(data_dict_output['velocity']).type(torch.float32)
             )
             torch.save(data, self.processed_file_names[self.data_names.index(subject)])
+
+if __name__=='__main__':
+    dataset = OneDDatasetLoader(
+        root_dir='/data1/tam/downloaded_datasets_transformed',
+        sub_dir='/processed/'
+    )

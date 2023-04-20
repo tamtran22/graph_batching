@@ -3,17 +3,15 @@ import numpy as np
 
 def read_1D_input(
         file_name : str,
-        var_dict = {
-            'node_attr' : ['x_end', 'y_end', 'z_end'], 
-            'edge_index' : ['PareID', 'ID'], 
-            'edge_attr' : ['Length', 'Diameter', 'Gene', 'Lobe', 'Flag', 'Vol0', 'Vol1']
-        },
         # var_dict = {
-        #     'node_attr' : ['x_end', 'y_end', 'z_end'],
-        #     'edge_index' : ['PareID', 'ID'],
-        #     'edge_attr' : ['Length', 'Diameter', 'Gene', 'Lobe', 'Flag'],
-        #     'vol' : ['Vol0', 'Vol1']
-        # }
+        #     'node_attr' : ['x_end', 'y_end', 'z_end'], 
+        #     'edge_index' : ['PareID', 'ID'], 
+        #     'edge_attr' : ['Length', 'Diameter', 'Gene', 'Lobe', 'Flag', 'Vol0', 'Vol1']
+        # },
+        var_dict = {
+            'node_attr' : ['x_end', 'y_end', 'z_end', 'Length', 'Diameter', 'Gene', 'Lobe', 'Flag', 'Vol0', 'Vol1'], 
+            'edge_index' : ['PareID', 'ID']
+        }
     ):
     r"""Read Output_subject_Amount_St_whole.dat
     Data format
@@ -74,9 +72,13 @@ def read_1D_input(
         for data_var in var_dict[var]:
             out_dict[var].append(data_dict[data_var])
     out_dict['edge_index'] = np.array(out_dict['edge_index'], dtype=np.int32)
-    out_dict['node_attr'] = edge_to_node(np.array(out_dict['node_attr'], dtype=np.float32).transpose(), 
+    out_dict['node_attr'] = edge_to_node(np.array(out_dict['node_attr'], dtype=np.float32).transpose(),
                                         out_dict['edge_index'])
-    out_dict['edge_attr'] = np.array(out_dict['edge_attr'], dtype=np.float32).transpose()
+    out_dict['node_attr'][0][0] = data_dict['x_start'][0]
+    out_dict['node_attr'][0][1] = data_dict['x_start'][1]
+    out_dict['node_attr'][0][2] = data_dict['x_start'][2]
+    # out_dict['edge_attr'] = edge_to_node(np.array(out_dict['edge_attr'], dtype=np.float32).transpose(),
+    #                                     out_dict['edge_index'])
     return out_dict
 
 def read_1D_output(
@@ -155,6 +157,7 @@ def node_to_edge(node_attr, edge_index):
 def edge_to_node(edge_attr, edge_index):
     n_node = edge_index.max() + 1
     if len(edge_attr.shape) <=1:
+        n_attr = 1
         node_attr = np.zeros(shape=(n_node,) , dtype=np.float32)
     else:
         n_attr = edge_attr.shape[1]

@@ -37,10 +37,19 @@ def _get_graph_partition(data : TorchGraphData, partition : np.array, recursive 
         partition_edge_index = torch.tensor(v_index(partition_edge_index))
     
     # Gather partition's nodes x
-    partition_x = data.x[partition_node_id]
+    partition_x = None
+    if hasattr(data, 'x'):
+        partition_x = data.x[partition_node_id]
 
     # Gather partition's edge attributes
-    partition_edge_attr = data.edge_attr[partition_edge_id]
+    partition_edge_attr = None
+    if hasattr(data, 'edge_attr'):
+        partition_edge_attr = data.edge_attr[partition_edge_id]
+    
+    # Gather partition's node attributes
+    partition_node_attr = None
+    if hasattr(data, 'node_attr'):
+        partition_node_attr = data.node_attr[partition_node_id]
 
     # Gather partition's auxiliary attributes
     partition_pressure = None
@@ -79,6 +88,7 @@ def _get_graph_partition(data : TorchGraphData, partition : np.array, recursive 
         x = partition_x,
         edge_index = partition_edge_index,
         edge_attr = partition_edge_attr,
+        node_attr = partition_node_attr,
         pressure = partition_pressure,
         flowrate = partition_flowrate,
         velocity = partition_velocity, 
@@ -95,9 +105,10 @@ def _get_time_partition(data : TorchGraphData, time_id : np.array) -> TorchGraph
     Get slice of graph data with given time step slicing.
     '''
     return TorchGraphData(
-        x = data.x,
-        edge_index = data.edge_index,
-        edge_attr = data.edge_attr,
+        x = data.x if hasattr(data, 'x') else None,
+        edge_index = data.edge_index if hasattr(data, 'edge_index') else None,
+        edge_attr = data.edge_attr if hasattr(data, 'edge_attr') else None,
+        node_attr = data.node_attr if hasattr(data, 'node_attr') else None,
         pressure = data.pressure[:,time_id] if hasattr(data, 'pressure') else None,
         flowrate = data.flowrate[:,time_id] if hasattr(data, 'flowrate') else None,
         velocity = data.velocity[:,time_id] if hasattr(data, 'velocity') else None,

@@ -211,7 +211,7 @@ class PARC(torch.nn.Module):
             depth = 3,
             pool_ratios = 0.2,
             sum_res = True,
-            act = 'relu'
+            act = F.relu
         )
     
     def reset_parameters(self):
@@ -221,10 +221,22 @@ class PARC(torch.nn.Module):
 
     def forward(self, F_initial, mesh_features, edge_index):
         feature_map = self.shape_descriptor(mesh_features, edge_index)
-        F_temp = torch.cat([feature_map, F_initial], dim=-1)
-        F_dot = self.derivative_solver(F_temp, edge_index)
-        F_int = self.integral_solver(F_dot, edge_index)
-        return F_dot, F_int
+
+        F_dots, Fs = [], []
+        F_current = F_initial
+        for _ in range(self.n_timesteps):
+            F_temp = torch.cat([feature_map, F_current], dim=-1)
+            F_dot = self.derivative_solver(F_temp, edge_index)
+            F_int = self.integral_solver(F_dot, edge_index)
+            F_current = F_current + F_int
+
+            F_dots.append(F_dot.unsqueeze(1))
+            Fs.append(F_current.unsqueeze(1))
+        
+        F_dots = torch.cat(F_dots, dim=1)
+        Fs = torch.cat(Fs, dim=1)
+
+        return Fs, F_dots
 
 
 if __name__=='__main__':
