@@ -38,51 +38,67 @@ def _get_graph_partition(data : TorchGraphData, partition : np.array, recursive 
     
     # Gather partition's nodes x
     partition_x = None
-    if hasattr(data, 'x'):
+    if data.x is not None:
         partition_x = data.x[partition_node_id]
 
     # Gather partition's edge attributes
     partition_edge_attr = None
-    if hasattr(data, 'edge_attr'):
+    if data.edge_attr is not None:
         partition_edge_attr = data.edge_attr[partition_edge_id]
     
     # Gather partition's node attributes
     partition_node_attr = None
-    if hasattr(data, 'node_attr'):
+    if data.node_attr is not None:
         partition_node_attr = data.node_attr[partition_node_id]
 
     # Gather partition's auxiliary attributes
     partition_pressure = None
-    if hasattr(data, 'pressure'):
+    if data.pressure is not None:
         partition_pressure = data.pressure[partition_node_id]
 
     partition_flowrate = None
-    if hasattr(data, 'flowrate'):
-        partition_flowrate = data.flowrate[partition_edge_id]
+    if data.flowrate is not None:
+        partition_flowrate = data.flowrate[partition_node_id]
 
     partition_velocity = None
-    if hasattr(data, 'velocity'):
-        partition_velocity = data.velocity[partition_edge_id]
+    if data.velocity is not None:
+        partition_velocity = data.velocity[partition_node_id]
+
+    partition_pressure_dot = None
+    if data.pressure_dot is not None:
+        partition_pressure_dot = data.pressure_dot[partition_node_id]
+
+    partition_flowrate_dot = None
+    if data.flowrate_dot is not None:
+        partition_flowrate = data.flowrate_dot[partition_node_id]
+
+    partition_velocity_dot = None
+    if data.velocity is not None:
+        partition_velocity_dot = data.velocity_dot[partition_node_id]
     
     partition_node_weight = None
-    if hasattr(data, 'node_weight'):
+    if data.node_weight is not None:
         partition_node_weight = data.node_weight[partition_node_id]
-        # Mark for main and auxiliary nodes
-        # _partition_edge_id = np.argwhere(_edge_mark == True).squeeze(1)
-        # _partition_edge_index = edge_index[:, _partition_edge_id]
-        # _partition_node_id = np.unique(np.concatenate(list(_partition_edge_index)))
         partition_node_mark = np.isin(partition_node_id, partition)
         partition_node_mark = torch.tensor(partition_node_mark, dtype=torch.int)
         partition_node_weight *= partition_node_mark
 
     partition_edge_weight = None
-    if hasattr(data, 'edge_weight'):
+    if data.edge_weight is not None:
         partition_edge_weight = data.edge_weight[partition_edge_id]
         # Mark for main and auxiliary edges
         _partition_edge_id = np.argwhere(_edge_mark == True).squeeze(1)
         partition_edge_mark = np.isin(partition_edge_id, _partition_edge_id)
         partition_edge_mark = torch.tensor(partition_edge_mark, dtype=torch.int)
         partition_edge_weight *= partition_edge_mark
+
+    # # Get partition of attribute
+    # for key in data._store:
+    #     if key == 'edge_index':
+    #         continue
+    #     partition_attribute = None
+    #     if data._store[key] is not None:
+    #         partition_attribute = data._store[key][partition_node_id]
 
     return TorchGraphData(
         x = partition_x,
@@ -92,6 +108,9 @@ def _get_graph_partition(data : TorchGraphData, partition : np.array, recursive 
         pressure = partition_pressure,
         flowrate = partition_flowrate,
         velocity = partition_velocity, 
+        pressure_dot = partition_pressure_dot,
+        flowrate_dot = partition_flowrate_dot,
+        velocity_dot = partition_velocity_dot, 
         node_weight=partition_node_weight,
         edge_weight=partition_edge_weight
     )
@@ -112,6 +131,9 @@ def _get_time_partition(data : TorchGraphData, time_id : np.array) -> TorchGraph
         pressure = data.pressure[:,time_id] if hasattr(data, 'pressure') else None,
         flowrate = data.flowrate[:,time_id] if hasattr(data, 'flowrate') else None,
         velocity = data.velocity[:,time_id] if hasattr(data, 'velocity') else None,
+        pressure_dot = data.pressure_dot[:,time_id] if hasattr(data, 'pressure_dot') else None,
+        flowrate_dot = data.flowrate_dot[:,time_id] if hasattr(data, 'flowrate_dot') else None,
+        velocity_dot = data.velocity_dot[:,time_id] if hasattr(data, 'velocity_dot') else None,
         node_weight = data.node_weight if hasattr(data, 'node_weight') else None,
         edge_weight = data.edge_weight if hasattr(data, 'edge_weight') else None
     )
@@ -240,7 +262,7 @@ def merge_graphs(datas : List[TorchGraphData]) -> TorchGraphData:
             if key == 'edge_index':
                 continue
             data_dict[key].append(data._store[key])
-        node_count += data.x.size(0)
+        node_count += data.node_attr.size(0)
     merged_data = TorchGraphData()
     for key in data_dict:
         if key == 'edge_index':

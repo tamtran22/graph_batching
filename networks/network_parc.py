@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
 from torch.nn import ModuleList
-from torch_geometric.nn import GCNConv, GraphUNet
+from torch_geometric.nn import GCNConv, GraphUNet, LayerNorm, Linear
 from torch_geometric.nn.resolver import activation_resolver
 from typing import Union, Callable
 
@@ -189,9 +189,13 @@ class PARC(torch.nn.Module):
         self.n_timesteps = n_timesteps
         self.n_meshfields = n_meshfields
 
+        self.input_fields = torch.nn.Sequential(
+            Linear(self.n_fields, self.n_hiddenfields),
+            LayerNorm(self.n_hiddenfields)
+        )
 
         self.derivative_solver = DerivativeSolver(
-            in_channels = self.n_hiddenfields + self.n_fields,
+            in_channels = self.n_hiddenfields + self.n_hiddenfields,
             hidden_channels = self.n_hiddenfields,
             out_channels = self.n_fields,
             act = F.relu
@@ -215,6 +219,7 @@ class PARC(torch.nn.Module):
         )
     
     def reset_parameters(self):
+        self.input_fields.reset_parameters()
         self.derivative_solver.reset_parameters()
         self.integral_solver.reset_parameters()
         self.shape_descriptor.reset_parameters()
@@ -225,9 +230,12 @@ class PARC(torch.nn.Module):
         F_dots, Fs = [], []
         F_current = F_initial
         for _ in range(self.n_timesteps):
-            F_temp = torch.cat([feature_map, F_current], dim=-1)
+            F_temp = self.input_fields(F_current)
+            F_temp = torch.cat([feature_map, F_temp], dim=-1)
             F_dot = self.derivative_solver(F_temp, edge_index)
+            F_dot = torch.tanh(F_dot)
             F_int = self.integral_solver(F_dot, edge_index)
+            F_int = torch.tanh(F_int)
             F_current = F_current + F_int
 
             F_dots.append(F_dot.unsqueeze(1))

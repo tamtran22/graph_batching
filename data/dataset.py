@@ -6,10 +6,12 @@ from data.data import TorchGraphData
 from typing import Optional, Callable, Union, List, Tuple
 from data.file_reader import *
 from preprocessing.batching import get_batch_graphs, merge_graphs
-from preprocessing.normalize import normalize_graph, calculate_weight
+from preprocessing.normalize import normalize_graph, calculate_weight, calculate_derivative
 
 
-
+class objectview(object):
+    def __init__(self, d) -> None:
+        self.__dict__ = d
 
 
 class DatasetLoader(Dataset):
@@ -162,7 +164,21 @@ class OneDDatasetLoader(DatasetLoader):
                 return var.std()
             else:
                 return var.std(axis=axis)
-        
+    
+    def median(self, var_name=None, axis=None):
+        if var_name is None:
+            return 0
+        else:
+            var = []
+            for i in range(self.len()):
+                data = self.__getitem__(i)
+                var.append(data._store[var_name])
+            var = torch.cat(var, dim=0)
+            if axis is None:
+                return var.median()
+            else:
+                return var.median(axis=axis)
+
     def batching(self, batch_size : int, batch_n_times : int, recursive : bool, sub_dir='/batched'):
         ''' Perform batching and return batched dataset.
         batch_size : approximate size of sub-graph datas.
@@ -222,55 +238,84 @@ class OneDDatasetLoader(DatasetLoader):
         # Calculate normalize params
         pressure_min = self.min('pressure')
         pressure_max = self.max('pressure')
-        velocity_min = self.min('velocity')
-        velocity_max = self.max('velocity')
+        flowrate_min = self.min('flowrate')
+        flowrate_max = self.max('flowrate')
+        pressure_dot_min = self.min('pressure_dot')
+        pressure_dot_max = self.max('pressure_dot')
+        flowrate_dot_min = self.min('flowrate_dot')
+        flowrate_dot_max = self.max('flowrate_dot')
 
-        # Cases with edge attributes
-        # edge_attr_min = self.min('edge_attr', axis=0)
-        # edge_attr_max = self.max('edge_attr', axis=0)
-        # vol0_min = edge_attr_min[-2]
-        # vol1_min = edge_attr_min[-1]
-        # vol0_max = edge_attr_max[-2]
-        # vol1_max = edge_attr_max[-1]
-        # edge_attr_min[-2] = min(vol0_min, vol1_min)
-        # edge_attr_min[-1] = min(vol0_min, vol1_min)
-        # edge_attr_max[-2] = max(vol0_max, vol1_max)
-        # edge_attr_max[-1] = max(vol0_max, vol1_max)
 
         # Cases with node attributes
         node_attr_min = self.min('node_attr', axis=0)
         node_attr_max = self.max('node_attr', axis=0)
-        vol0_min = node_attr_min[-2]
-        vol1_min = node_attr_min[-1]
-        vol0_max = node_attr_max[-2]
-        vol1_max = node_attr_max[-1]
-        node_attr_min[-2] = min(vol0_min, vol1_min)
-        node_attr_min[-1] = min(vol0_min, vol1_min)
-        node_attr_max[-2] = max(vol0_max, vol1_max)
-        node_attr_max[-1] = max(vol0_max, vol1_max)
+        # vol0_min = node_attr_min[-2]
+        # vol1_min = node_attr_min[-1]
+        # vol0_max = node_attr_max[-2]
+        # vol1_max = node_attr_max[-1]
+        # node_attr_min[-2] = min(vol0_min, vol1_min)
+        # node_attr_min[-1] = min(vol0_min, vol1_min)
+        # node_attr_max[-2] = max(vol0_max, vol1_max)
+        # node_attr_max[-1] = max(vol0_max, vol1_max)
+
+
+
+        kwargs_minmax = objectview({'min':node_attr_min,'max':node_attr_max})
+        kwargs_logarithmic = objectview({
+            'min':node_attr_min,
+            'max':node_attr_max,
+            'logscale':torch.tensor([-1,-1,-1,1e2,1e2,-1,-1,-1,1e0,1e0]).float()
+        })
 
         # Normalize
         file_names = [f'{data_name}.pt' for data_name in self.data_names]
         for i in range(self.len()):
-            # print(f'Dataset {i}')
             normalized_data = normalize_graph(
                 data=self.__getitem__(i),
-                # edge_attr_min=edge_attr_min, edge_attr_max=edge_attr_max,
-                node_attr_min=node_attr_min, node_attr_max=node_attr_max,
+                node_attr_pipeline=[
+                    ([0,1,2,5,6,7],'minmax', kwargs_minmax),
+                    ([3,4,8,9],'logarithmic', kwargs_logarithmic)
+                ],
                 pressure_min=pressure_min, pressure_max=pressure_max,
-                velocity_min=velocity_min, velocity_max=velocity_max
+                flowrate_min=flowrate_min, flowrate_max = flowrate_max, flowrate_logscale = 1e10,
+                pressure_dot_min=pressure_dot_min, pressure_dot_max=pressure_dot_max,
+                flowrate_dot_min=flowrate_dot_min, flowrate_dot_max = flowrate_max, flowrate_dot_logscale = 1e10,
             )
             # adding weight
-            # edge_weight = calculate_weight(x=normalized_data.node_attr[:,0], bins=10000)
-            # setattr(normalized_data, 'edge_weight', torch.tensor(edge_weight, dtype=torch.float32))
-            # node_weight = edge_to_node(edge_weight, normalized_data.edge_index.numpy())
-            # setattr(normalized_data, 'node_weight', torch.tensor(node_weight, dtype=torch.float32))
 
             node_weight = calculate_weight(x=normalized_data.node_attr[:,0], bins=10000)
             setattr(normalized_data, 'node_weight', torch.tensor(node_weight, dtype=torch.float32))
 
             torch.save(normalized_data, f'{self.root}{sub_dir}/{file_names[i]}')
         return OneDDatasetLoader(root_dir=self.root, sub_dir=sub_dir)
+
+    def calculate_derivative(self, 
+        sub_dir='/calculated/',
+        var_name : Union[List[str], str] = None, 
+        axis : int = None, 
+        delta_t : float = None
+    ):
+        if var_name == None:
+            return self
+        else:
+            self._clean_sub_dir(sub_dir=sub_dir)
+            os.system(f'mkdir {self.root}{sub_dir}')
+            if not isinstance(var_name, list):
+                _var_names=[var_name]
+            else:
+                _var_names=var_name
+            for i in range(self.len()):
+                data = self.__getitem__(i)
+                for _var_name in _var_names:
+                    F_dots = calculate_derivative(
+                        data=data,
+                        var_name=_var_name,
+                        axis=axis,
+                        delta_t=delta_t
+                    )
+                    setattr(data, f'{_var_name}_dot', F_dots)
+                torch.save(data, f'{self.root}{sub_dir}/{self.data_names[i]}.pt')
+            return OneDDatasetLoader(root_dir=self.root, sub_dir=sub_dir)
 
 
         
