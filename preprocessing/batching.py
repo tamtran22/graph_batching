@@ -7,7 +7,7 @@ from typing import List, Union, Tuple
 
 #####################################################################
 
-def _get_graph_partition(data : TorchGraphData, partition : np.array, recursive : bool) -> TorchGraphData:
+def _get_graph_partition_v1(data : TorchGraphData, partition : np.array, recursive : bool) -> TorchGraphData:
     '''
     Get sub-graph data of a data with given partition's node index.
     '''
@@ -61,8 +61,8 @@ def _get_graph_partition(data : TorchGraphData, partition : np.array, recursive 
         partition_flowrate = data.flowrate[partition_node_id]
 
     partition_velocity = None
-    if data.velocity is not None:
-        partition_velocity = data.velocity[partition_node_id]
+    # if data.velocity is not None:
+    #     partition_velocity = data.velocity[partition_node_id]
 
     partition_pressure_dot = None
     if data.pressure_dot is not None:
@@ -70,11 +70,11 @@ def _get_graph_partition(data : TorchGraphData, partition : np.array, recursive 
 
     partition_flowrate_dot = None
     if data.flowrate_dot is not None:
-        partition_flowrate = data.flowrate_dot[partition_node_id]
+        partition_flowrate_dot = data.flowrate_dot[partition_node_id]
 
     partition_velocity_dot = None
-    if data.velocity is not None:
-        partition_velocity_dot = data.velocity_dot[partition_node_id]
+    # if data.velocity is not None:
+    #     partition_velocity_dot = data.velocity_dot[partition_node_id]
     
     partition_node_weight = None
     if data.node_weight is not None:
@@ -92,14 +92,6 @@ def _get_graph_partition(data : TorchGraphData, partition : np.array, recursive 
         partition_edge_mark = torch.tensor(partition_edge_mark, dtype=torch.int)
         partition_edge_weight *= partition_edge_mark
 
-    # # Get partition of attribute
-    # for key in data._store:
-    #     if key == 'edge_index':
-    #         continue
-    #     partition_attribute = None
-    #     if data._store[key] is not None:
-    #         partition_attribute = data._store[key][partition_node_id]
-
     return TorchGraphData(
         x = partition_x,
         edge_index = partition_edge_index,
@@ -116,10 +108,70 @@ def _get_graph_partition(data : TorchGraphData, partition : np.array, recursive 
     )
 
 
+def _get_graph_partition_v2(data : TorchGraphData, partition : np.array, recursive : bool) -> TorchGraphData:
+    '''
+    Get sub-graph data of a data with given partition's node index.
+    '''
+    edge_index = data.edge_index.numpy()
+    
+    # Marking edges containing nodes in partition's node list
+    edge_mark = np.isin(edge_index, partition)
+    if recursive:
+        # _edge_mark = np.logical_and(edge_mark[0], edge_mark[1])
+        edge_mark = np.logical_or(edge_mark[0], edge_mark[1])
+    else:
+        edge_mark = np.logical_and(edge_mark[0], edge_mark[1])
+        # _edge_mark = edge_mark
+    partition_edge_id = np.argwhere(edge_mark == True).squeeze(1)
+    # Gather edge index containing nodes in partition's node list
+    partition_edge_index = edge_index[:,partition_edge_id]
+    
+    # Gather nodes which are contained in partition's edges
+    partition_node_id = np.unique(np.concatenate(list(partition_edge_index) + [partition]))
+
+    # Lambda function to convert global node index to partition's node index
+    index = lambda n : list(partition_node_id).index(n)
+    v_index = np.vectorize(index)
+    
+    # Tranform edge_index value into partition nodes index
+    if partition_edge_index.shape[1] > 0:
+        partition_edge_index = torch.tensor(v_index(partition_edge_index))
+    
+    # Gather partition's nodes x
+    partition_data_dict = {}
+    for key in data._store:
+        if key == 'edge_index':
+            partition_data_dict[key] = partition_edge_index
+        else:
+            partition_data_dict[key] = data._store[key][partition_node_id]
+
+    partition_node_weight = None
+    if data.node_weight is not None:
+        partition_node_weight = data.node_weight[partition_node_id]
+        partition_node_mark = np.isin(partition_node_id, partition)
+        partition_node_mark = torch.tensor(partition_node_mark, dtype=torch.int)
+        partition_node_weight *= partition_node_mark
+
+    # partition_edge_weight = None
+    # if data.edge_weight is not None:
+    #     partition_edge_weight = data.edge_weight[partition_edge_id]
+    #     # Mark for main and auxiliary edges
+    #     _partition_edge_id = np.argwhere(_edge_mark == True).squeeze(1)
+    #     partition_edge_mark = np.isin(partition_edge_id, _partition_edge_id)
+    #     partition_edge_mark = torch.tensor(partition_edge_mark, dtype=torch.int)
+    #     partition_edge_weight *= partition_edge_mark
+
+    partition_data = TorchGraphData()
+    for key in partition_data_dict:
+        setattr(partition_data, key, partition_data_dict[key])
+    if partition_node_weight is not None:
+        setattr(partition_data, 'node_weight', partition_node_weight)
+    return partition_data
 
 
 
-def _get_time_partition(data : TorchGraphData, time_id : np.array) -> TorchGraphData:
+
+def _get_time_partition_v1(data : TorchGraphData, time_id : np.array) -> TorchGraphData:
     '''
     Get slice of graph data with given time step slicing.
     '''
@@ -138,12 +190,23 @@ def _get_time_partition(data : TorchGraphData, time_id : np.array) -> TorchGraph
         edge_weight = data.edge_weight if hasattr(data, 'edge_weight') else None
     )
 
+def _get_time_partition_v2(data : TorchGraphData, time_id : np.array) -> TorchGraphData:
+    '''
+    Get slice of graph data with given time step slicing.
+    '''
+    partition_data = TorchGraphData()
+    for key in data._store:
+        if key in ['pressure', 'flowrate', 'velocity', 'flowrate_bc', 'pressure_dot', 'flowrate_dot']:
+            setattr(partition_data, key, data._store[key][:,time_id])
+        else:
+            setattr(partition_data, key, data._store[key])
+    return partition_data
 
 
 
 
 def get_batch_graphs(data : TorchGraphData, batch_size : int = None, batch_n_times : int = None, 
-                    recursive : bool = False) -> List[TorchGraphData]:
+                    recursive : bool = False, step : int = 1) -> List[TorchGraphData]:
     '''
     Get list of sub-graphs and slices of data with given batch size and batch time step count.
     '''
@@ -174,7 +237,7 @@ def get_batch_graphs(data : TorchGraphData, batch_size : int = None, batch_n_tim
         #     print(len(part), part)
 
         for partition in partitions:
-            _batch_graphs.append(_get_graph_partition(data, partition, recursive))
+            _batch_graphs.append(_get_graph_partition_v2(data, partition, recursive))
     else:
         _batch_graphs.append(data)
     
@@ -185,12 +248,17 @@ def get_batch_graphs(data : TorchGraphData, batch_size : int = None, batch_n_tim
         i = 0
         while i < data.number_of_timesteps - 1:
             i_end = i + batch_n_times + recursive
-            time_ids.append(np.arange(i, min(i_end, data.number_of_timesteps), 1, dtype=int))
+            time_ids.append(
+                np.arange(start=i, 
+                          stop=min(i_end, data.number_of_timesteps), 
+                          step=step, 
+                          dtype=int)
+            )
             i = i_end - recursive
         
         for _batch_graph in _batch_graphs:
             for time_id in time_ids:
-                batch_graphs.append(_get_time_partition(_batch_graph, time_id))
+                batch_graphs.append(_get_time_partition_v2(_batch_graph, time_id))
     else:
         batch_graphs = _batch_graphs
 

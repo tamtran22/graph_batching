@@ -4,6 +4,7 @@ from torch.nn import ModuleList
 from torch_geometric.nn import GCNConv, GraphUNet, LayerNorm, Linear
 from torch_geometric.nn.resolver import activation_resolver
 from typing import Union, Callable
+from torch_geometric.typing import OptTensor
 
 
 
@@ -181,6 +182,7 @@ class PARC(torch.nn.Module):
         n_timesteps,
         n_hiddenfields,
         n_meshfields,
+        n_bcfields,
         **kwargs
     ) -> None:
         super().__init__(**kwargs)
@@ -188,10 +190,17 @@ class PARC(torch.nn.Module):
         self.n_hiddenfields = n_hiddenfields
         self.n_timesteps = n_timesteps
         self.n_meshfields = n_meshfields
+        self.n_bcfields = n_bcfields
 
+        # self.input_fields = GCNConv(self.n_fields+self.n_bcfields, 
+                                        # self.n_hiddenfields, dtype=torch.float32)
         self.input_fields = torch.nn.Sequential(
-            Linear(self.n_fields, self.n_hiddenfields),
-            LayerNorm(self.n_hiddenfields)
+            Linear(self.n_fields + self.n_bcfields, self.n_hiddenfields),
+            LayerNorm(self.n_hiddenfields),
+            torch.nn.ReLU(),
+            Linear(self.n_hiddenfields, self.n_hiddenfields),
+            LayerNorm(self.n_hiddenfields),
+            torch.nn.ReLU()
         )
 
         self.derivative_solver = DerivativeSolver(
@@ -224,18 +233,22 @@ class PARC(torch.nn.Module):
         self.integral_solver.reset_parameters()
         self.shape_descriptor.reset_parameters()
 
-    def forward(self, F_initial, mesh_features, edge_index):
+    def forward(self, F_initial, mesh_features, edge_index, F_bc : OptTensor = None):
         feature_map = self.shape_descriptor(mesh_features, edge_index)
 
         F_dots, Fs = [], []
         F_current = F_initial
-        for _ in range(self.n_timesteps):
-            F_temp = self.input_fields(F_current)
+        for timestep in range(self.n_timesteps):
+            if self.n_bcfields > 0:
+                F_temp = torch.cat([F_current, F_bc[:,timestep + 1].unsqueeze(1)], dim=1)
+            else:
+                F_temp = F_current
+            F_temp = self.input_fields(F_temp)
             F_temp = torch.cat([feature_map, F_temp], dim=-1)
             F_dot = self.derivative_solver(F_temp, edge_index)
-            F_dot = torch.tanh(F_dot)
+            # F_dot = F.relu(F_dot)
             F_int = self.integral_solver(F_dot, edge_index)
-            F_int = torch.tanh(F_int)
+            # F_int = F.relu(F_dot)
             F_current = F_current + F_int
 
             F_dots.append(F_dot.unsqueeze(1))

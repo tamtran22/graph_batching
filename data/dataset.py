@@ -179,7 +179,7 @@ class OneDDatasetLoader(DatasetLoader):
             else:
                 return var.median(axis=axis)
 
-    def batching(self, batch_size : int, batch_n_times : int, recursive : bool, sub_dir='/batched'):
+    def batching(self, batch_size : int, batch_n_times : int, recursive : bool, sub_dir='/batched', step=1):
         ''' Perform batching and return batched dataset.
         batch_size : approximate size of sub-graph datas.
         batch_n_times : number of timesteps in sub-graph datas.
@@ -195,7 +195,8 @@ class OneDDatasetLoader(DatasetLoader):
                 data=self.__getitem__(i),
                 batch_size=batch_size,
                 batch_n_times=batch_n_times,
-                recursive=recursive
+                recursive=recursive,
+                step=step
             )
             batched_dataset += batched_data
             batched_dataset_id += [i]*len(batched_data)
@@ -244,6 +245,8 @@ class OneDDatasetLoader(DatasetLoader):
         pressure_dot_max = self.max('pressure_dot')
         flowrate_dot_min = self.min('flowrate_dot')
         flowrate_dot_max = self.max('flowrate_dot')
+        flowrate_bc_min = self.min('flowrate_bc')
+        flowrate_bc_max = self.max('flowrate_bc')
 
 
         # Cases with node attributes
@@ -279,7 +282,8 @@ class OneDDatasetLoader(DatasetLoader):
                 pressure_min=pressure_min, pressure_max=pressure_max,
                 flowrate_min=flowrate_min, flowrate_max = flowrate_max, flowrate_logscale = 1e10,
                 pressure_dot_min=pressure_dot_min, pressure_dot_max=pressure_dot_max,
-                flowrate_dot_min=flowrate_dot_min, flowrate_dot_max = flowrate_max, flowrate_dot_logscale = 1e10,
+                flowrate_dot_min=flowrate_dot_min, flowrate_dot_max = flowrate_dot_max, flowrate_dot_logscale = 1e10,
+                flowrate_bc_min=flowrate_bc_min, flowrate_bc_max=flowrate_bc_max
             )
             # adding weight
 
@@ -399,9 +403,12 @@ class OneDDatasetBuilder(DatasetBuilder):
             file_name_outputs = [file_name_output(subject, time) for time in self.time_id]
             data_dict_output = read_1D_output(file_name_outputs)
 
-            diam = np.expand_dims(data_dict_input['node_attr'][:,1], axis=1)
-            data_dict_output['velocity'] = data_dict_output['flowrate'] / \
-                        (np.pi * np.square(diam) / 4) # U = Q / A = Q / (pi*d^2/4)
+            # diam = np.expand_dims(data_dict_input['node_attr'][:,1], axis=1)
+            # data_dict_output['velocity'] = data_dict_output['flowrate'] / \
+            #             (np.pi * np.square(diam) / 4) # U = Q / A = Q / (pi*d^2/4)
+            flowrate_bc = [np.expand_dims(data_dict_output['flowrate'][0,:], axis=0)] \
+                            *data_dict_output['flowrate'].shape[0]
+            flowrate_bc = np.concatenate(flowrate_bc, axis=0)
 
             data = TorchGraphData(
                 # x = torch.tensor(data_dict_input['node_attr']).type(torch.float32),
@@ -409,7 +416,8 @@ class OneDDatasetBuilder(DatasetBuilder):
                 node_attr = torch.tensor(data_dict_input['node_attr']).type(torch.float32),
                 pressure = torch.tensor(data_dict_output['pressure']).type(torch.float32),
                 flowrate = torch.tensor(data_dict_output['flowrate']).type(torch.float32),
-                velocity = torch.tensor(data_dict_output['velocity']).type(torch.float32)
+                # velocity = torch.tensor(data_dict_output['velocity']).type(torch.float32)
+                flowrate_bc = torch.tensor(flowrate_bc).type(torch.float32)
             )
             torch.save(data, self.processed_file_names[self.data_names.index(subject)])
 
