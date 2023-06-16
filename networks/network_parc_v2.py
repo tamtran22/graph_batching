@@ -1,0 +1,252 @@
+import torch
+import torch.nn.functional as F
+import torch.nn as nn
+import torch_geometric.nn as gnn
+from typing import Union, Callable
+from torch_geometric.typing import OptTensor, Tensor
+import torch_scatter
+
+
+###############################################################################
+# Graph processor layer
+class ProcessorLayer(gnn.MessagePassing):
+    def __init__(self,
+        n_channels : int,
+        use_edge_attr : bool = False,
+        aggregation : str = 'sum',
+        **kwargs
+    ) -> None:
+        super(ProcessorLayer, self).__init__( **kwargs )
+        self.aggregation = aggregation
+        
+        self.edge_mlp = nn.Sequential(
+            gnn.Linear(2*n_channels+use_edge_attr*n_channels, n_channels),
+            nn.ReLU(),
+            gnn.Linear(n_channels, n_channels),
+            nn.LayerNorm(n_channels)
+        )
+
+        self.node_mlp = nn.Sequential(
+            gnn.Linear(2*n_channels, n_channels),
+            nn.ReLU(),
+            gnn.Linear(n_channels, n_channels),
+            nn.LayerNorm(n_channels)
+        )
+        self.reset_parameters()
+    
+    def reset_parameters(self):
+        self.node_mlp[0].reset_parameters()
+        self.node_mlp[2].reset_parameters()
+
+        self.edge_mlp[0].reset_parameters()
+        self.edge_mlp[2].reset_parameters()
+    
+    def forward(self, x, edge_index, edge_attr : OptTensor = None, size = None):
+        out, updated_edges = self.propagate(
+            edge_index, 
+            x=x,
+            edge_attr=edge_attr,
+            size=size
+        )
+        updated_nodes = torch.cat([x, out], dim=1)
+
+        updated_nodes = self.node_mlp(updated_nodes)
+        return updated_nodes, updated_edges
+    
+    def message(self, x_i, x_j, edge_attr : OptTensor = None):
+        updated_edges = torch.cat([x_i, x_j], dim=1)
+        if edge_attr is not None:
+            updated_edges = torch.cat([updated_edges, edge_attr], dim=1)
+            updated_edges = edge_attr + self.edge_mlp(updated_edges)
+        else:
+            updated_edges = self.edge_mlp(updated_edges)
+        return updated_edges
+    
+    def aggregate(self, updated_edges, edge_index, dim_size = None):
+        node_dim=0
+        out = torch_scatter.scatter(updated_edges, edge_index[0,:], dim=node_dim, 
+                                    reduce = self.aggregation)
+        return out, updated_edges
+    
+
+############################################################################
+# Mesh graph net
+class MeshGraphNet(nn.Module):
+    def __init__(self,
+        node_in_channels : int,
+        node_out_channels : int, 
+        edge_in_channels : int = 0,
+        edge_out_channels : int = 0,
+        hidden_channels : int = 128,
+        n_layers : int = 10
+    ) -> None:
+        super().__init__()
+
+        # Node encoder #######################################
+        if node_in_channels <= 0:
+            self.node_encoder = None
+        else:
+            self.node_encoder = nn.Sequential(
+                gnn.Linear(node_in_channels, hidden_channels),
+                nn.ReLU(),
+                gnn.Linear(hidden_channels, hidden_channels),
+                nn.LayerNorm(hidden_channels)
+            )
+
+        # Edge encoder #######################################
+        if edge_in_channels <= 0:
+            self.edge_encoder = None
+        else:
+            self.edge_encoder = nn.Sequential(
+                gnn.Linear(edge_in_channels, hidden_channels),
+                nn.ReLU(),
+                gnn.Linear(hidden_channels, hidden_channels),
+                nn.LayerNorm(hidden_channels)
+            )
+
+        # Node decoder #######################################
+        if node_out_channels <= 0:
+            self.node_decoder = None
+        else:
+            self.node_decoder = nn.Sequential(
+                gnn.Linear(hidden_channels, hidden_channels),
+                nn.ReLU(),
+                gnn.Linear(hidden_channels, node_out_channels)
+            )
+        
+        # Edge decoder #######################################
+        if edge_out_channels <= 0:
+            self.edge_decoder = None
+        else:
+            self.edge_decoder = nn.Sequential(
+                gnn.Linear(hidden_channels, hidden_channels),
+                nn.ReLU(),
+                gnn.Linear(hidden_channels, edge_out_channels)
+            )
+
+        # Processor layers ###################################
+        self.processor = nn.ModuleList()
+        assert (n_layers >= 1)
+        # First layer may input None type edge attr
+        use_edge_attr = edge_in_channels > 0
+        self.processor.append(ProcessorLayer(hidden_channels, use_edge_attr))
+        for _ in range(n_layers - 1):
+            # Second layers onward input edge attr from the first layer.
+            self.processor.append(ProcessorLayer(hidden_channels, True))
+        
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        if self.node_encoder is not None:
+            self.node_encoder[0].reset_parameters()
+            self.node_encoder[2].reset_parameters()
+        
+        if self.edge_encoder is not None:
+            self.edge_encoder[0].reset_parameters()
+            self.edge_encoder[2].reset_parameters()
+
+        if self.node_decoder is not None:
+            self.node_decoder[0].reset_parameters()
+            self.node_decoder[2].reset_parameters()
+        
+        if self.edge_decoder is not None:
+            self.edge_decoder[0].reset_parameters()
+            self.edge_decoder[2].reset_parameters()
+        
+        for i in range(len(self.processor)):
+            self.processor[i].reset_parameters()
+
+    def forward(self, x, edge_index, edge_attr : OptTensor = None):
+        x = self.node_encoder(x)
+        if edge_attr is not None:
+            edge_attr = self.edge_encoder(edge_attr)
+        for i in range(len(self.processor)):
+            x, edge_attr = self.processor[i](x, edge_index, edge_attr)
+        
+        if self.edge_decoder is None:
+            return self.node_decoder(x)
+        else:
+            return self.node_decoder(x) , self.edge_decoder(edge_attr)
+
+
+
+############################################################################
+# Parc graph
+class PARC(nn.Module):
+    def __init__(self,
+        n_fields,
+        n_timesteps,
+        n_hiddenfields,
+        n_meshfields,
+        n_bcfields,
+        **kwargs
+    ) -> None:
+        super().__init__(**kwargs)
+        self.n_fields = n_fields
+        self.n_timesteps = n_timesteps
+        self.n_hiddenfields = n_hiddenfields
+        self.n_meshfields = n_meshfields
+        self.n_bcfields = n_bcfields
+        
+        self.derivative_solver = MeshGraphNet(
+            node_in_channels=self.n_fields + self.n_hiddenfields + self.n_bcfields,
+            node_out_channels=self.n_fields,
+            hidden_channels=self.n_hiddenfields,
+            n_layers=8
+        )
+
+        self.integral_solver = MeshGraphNet(
+            node_in_channels=self.n_fields,
+            node_out_channels=self.n_fields,
+            hidden_channels=self.n_hiddenfields,
+            n_layers=8
+        )
+
+        self.shape_descriptor = MeshGraphNet(
+            node_in_channels=n_meshfields,
+            node_out_channels=n_hiddenfields,
+            hidden_channels=n_hiddenfields,
+            n_layers=8
+        )
+        # self.shape_descriptor = nn.Identity()
+
+        self.reset_parameters()
+    
+    def reset_parameters(self):
+        self.derivative_solver.reset_parameters()
+        self.integral_solver.reset_parameters()
+        self.shape_descriptor.reset_parameters()
+
+    def forward(self, 
+        F_initial : Tensor, 
+        mesh_features : Tensor, 
+        edge_index : Tensor, 
+        F_bc : OptTensor = None
+    ):
+        feature_map = self.shape_descriptor(mesh_features, edge_index)
+
+        F_dots, Fs = [], []
+        F_current = F_initial
+        for timestep in range(self.n_timesteps):
+            if self.n_bcfields > 0:
+                F_temp = torch.cat([F_current, F_bc[:,timestep + 1].unsqueeze(1)], dim=1)
+            else:
+                F_temp = F_current
+            # print('1',F_temp.size())
+            F_temp = torch.cat([feature_map, F_temp], dim=-1)
+            # print('2',F_temp.size())
+            F_dot = self.derivative_solver(F_temp, edge_index)
+            # print('3', F_dot.size())
+
+            F_int = self.integral_solver(F_dot, edge_index)
+            # print('4', F_int.size())
+
+            F_current = F_current + F_int
+
+            F_dots.append(F_dot.unsqueeze(1))
+            Fs.append(F_current.unsqueeze(1))
+        
+        F_dots = torch.cat(F_dots, dim=1)
+        Fs = torch.cat(Fs, dim=1)
+
+        return Fs, F_dots

@@ -75,6 +75,9 @@ class DatasetLoader(Dataset):
         return len(self.data_names)
 
     def __getitem__(self, index):
+        return self.get(index)
+    
+    def get(self, index):
         return torch.load(self.processed_file_names[index])
 
 
@@ -352,6 +355,15 @@ class DatasetBuilder(Dataset):
     def process(self):
         # Write code for data processing here.
         raise NotImplemented
+    
+    def len(self):
+        return len(self.data_names)
+
+    def __getitem__(self, index):
+        return self.get(index)
+    
+    def get(self, index):
+        return torch.load(self.processed_file_names[index])
 
 
 

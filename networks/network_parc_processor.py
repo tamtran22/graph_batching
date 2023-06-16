@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
-from torch.nn import Sequential, Linear, ReLU, ModuleList
-from torch_geometric.nn import GCNConv, GraphUNet, LayerNorm, MessagePassing
+import torch.nn as nn
+import torch_geometric.nn as gnn
 # from torch_geometric.nn.resolver import activation_resolver
 from typing import Union, Callable
 from torch_geometric.typing import OptTensor
@@ -9,26 +9,29 @@ import torch_scatter
 
 
 
-class ProcessorLayer(MessagePassing):
+class ProcessorLayer(gnn.MessagePassing):
     '''
     Graph processor takes node wise and edge wise input and return
     node wise and edge wise output with given shape
     '''
-    def __init__(self, in_channels, out_channels, 
-                aggregate_type = 'sum', **kwargs) -> None:
+    def __init__(self, 
+        n_channels, 
+        use_edge_attr = False,
+        aggregate_type = 'sum', **kwargs) -> None:
         super(ProcessorLayer, self).__init__( **kwargs )
+
         self.aggregate_type = aggregate_type
-        self.node_mlp = Sequential(
-            Linear( in_channels + out_channels , out_channels),
-            ReLU(),
-            Linear( out_channels, out_channels),
-            LayerNorm( out_channels)
+        self.edge_mlp = nn.Sequential(
+            gnn.Linear( 2 * n_channels + use_edge_attr * n_channels, n_channels),
+            nn.ReLU(),
+            gnn.Linear( n_channels, n_channels),
+            nn.LayerNorm( n_channels)
         )
-        self.edge_mlp = Sequential(
-            Linear( 2 * in_channels, out_channels),
-            ReLU(),
-            Linear( out_channels, out_channels),
-            LayerNorm( out_channels)
+        self.node_mlp = nn.Sequential(
+            gnn.Linear( 2 * n_channels, n_channels),
+            nn.ReLU(),
+            gnn.Linear( n_channels, n_channels),
+            nn.LayerNorm( n_channels)
         )
         self.reset_parameters()
     
@@ -42,30 +45,80 @@ class ProcessorLayer(MessagePassing):
         self.edge_mlp[0].reset_parameters()
         self.edge_mlp[2].reset_parameters()
     
-    def forward(self, x, edge_index):
-        '''
-        pre and post-process node features->embeddings
-        message passing (propagate)
-        
-        x: [node_num, in_channels]
-        edge_index: [2, edge_num]
-        edge_attr: [edge_num, in_channels]
-        '''
-        out, updated_edges = self.propagate(edge_index, x = x)
+    def forward(self, x, edge_index, edge_attr : OptTensor = None, size=None):
 
+        out, updated_edges = self.propagate(
+            edge_index, 
+            x=x,
+            edge_attr=edge_attr,
+            size=size
+        )
+        print('finished propagating')
         updated_nodes = torch.cat([x, out], dim=1)
 
         updated_nodes = self.node_mlp(updated_nodes)
-        return updated_nodes #, updated_edges
+        return updated_nodes, updated_edges
     
-    def message(self, x_i, x_j):
+    def message(self, x_i, x_j, edge_attr : OptTensor = None):
         updated_edges = torch.cat([x_i, x_j], dim=1)
-        updated_edges = self.edge_mlp(updated_edges)
+        if edge_attr is not None:
+            updated_edges = torch.cat([updated_edges, edge_attr], dim=1)
+            updated_edges = edge_attr + self.edge_mlp(updated_edges)
+        else:
+            updated_edges = self.edge_mlp(updated_edges)
         return updated_edges
     
     def aggregate(self, updated_edges, edge_index, dim_size = None):
-        out = torch_scatter.scatter(updated_edges, edge_index[1,:], dim=0, reduce = self.aggregate_type)
+        node_dim=0
+        out = torch_scatter.scatter(updated_edges, edge_index[1,:], dim=node_dim, 
+                                    reduce = self.aggregate_type)
         return out, updated_edges
+    
+
+
+class MeshGraphNet(nn.Module):
+    def __init__(
+        self,
+        in_channels : int,
+        out_channels : int,
+        hidden_channels : int,
+        n_layers : int,
+        emb=False
+    ) -> None:
+        super().__init__()
+        self.n_layers = n_layers
+
+        self.node_encoder = nn.Sequential(
+            gnn.Linear(in_channels, hidden_channels),
+            nn.ReLU(),
+            gnn.Linear(hidden_channels, hidden_channels),
+            nn.LayerNorm(hidden_channels)
+        )
+
+        # Not implemented
+        self.edge_encoder = None
+
+        self.processor = nn.ModuleList()
+        assert (self.n_layers >= 1)
+        
+        for _ in range(self.n_layers):
+            self.processor.append(ProcessorLayer(hidden_channels))
+        
+        self.decoder = nn.Sequential(
+            gnn.Linear(hidden_channels, out_channels),
+            nn.ReLU(),
+            gnn.Linear(hidden_channels, out_channels)
+        )
+
+    def forward(self, x, edge_index, edge_attr : OptTensor = None):
+        x = self.node_encoder(x)
+        print(x.size())
+        if self.edge_encoder is not None:
+            edge_attr = self.edge_encoder(edge_attr)
+        for i in range(self.n_layers):
+            x = self.processor[i](x, edge_index, edge_attr)
+        return self.decoder(x)
+
 
 
 
