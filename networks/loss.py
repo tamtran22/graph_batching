@@ -8,7 +8,8 @@ def mean_squared_error(input, target):
 
 def weighted_mean_squared_error(input, target, weight):
     squared_error = torch.square(input - target)
-    weighted_square_error = torch.einsum('ijk,i->ijk', squared_error, weight)
+    # weighted_square_error = torch.einsum('ijk,i->ijk', squared_error, weight)
+    weighted_square_error = torch.einsum('ij,i->ij', squared_error, weight)
     return torch.mean(weighted_square_error)
 
 class WeightedMSELoss(_Loss):

@@ -244,10 +244,10 @@ class OneDDatasetLoader(DatasetLoader):
         pressure_max = self.max('pressure')
         flowrate_min = self.min('flowrate')
         flowrate_max = self.max('flowrate')
-        pressure_dot_min = self.min('pressure_dot')
-        pressure_dot_max = self.max('pressure_dot')
-        flowrate_dot_min = self.min('flowrate_dot')
-        flowrate_dot_max = self.max('flowrate_dot')
+        # pressure_dot_min = self.min('pressure_dot')
+        # pressure_dot_max = self.max('pressure_dot')
+        # flowrate_dot_min = self.min('flowrate_dot')
+        # flowrate_dot_max = self.max('flowrate_dot')
         flowrate_bc_min = self.min('flowrate_bc')
         flowrate_bc_max = self.max('flowrate_bc')
 
@@ -282,10 +282,10 @@ class OneDDatasetLoader(DatasetLoader):
                     ([0,1,2,5,6,7],'minmax', kwargs_minmax),
                     ([3,4,8,9],'logarithmic', kwargs_logarithmic)
                 ],
-                pressure_min=pressure_min, pressure_max=pressure_max,
-                flowrate_min=flowrate_min, flowrate_max = flowrate_max, flowrate_logscale = 1e10,
-                pressure_dot_min=pressure_dot_min, pressure_dot_max=pressure_dot_max,
-                flowrate_dot_min=flowrate_dot_min, flowrate_dot_max = flowrate_dot_max, flowrate_dot_logscale = 1e10,
+                pressure_min=pressure_min, pressure_max=pressure_max, pressure_logscale = 1e6,
+                flowrate_min=flowrate_min, flowrate_max = flowrate_max, flowrate_logscale = 1e12,
+                # pressure_dot_min=pressure_dot_min, pressure_dot_max=pressure_dot_max,
+                # flowrate_dot_min=flowrate_dot_min, flowrate_dot_max = flowrate_dot_max, #flowrate_dot_logscale = 1e10,
                 flowrate_bc_min=flowrate_bc_min, flowrate_bc_max=flowrate_bc_max
             )
             # adding weight
@@ -425,7 +425,7 @@ class OneDDatasetBuilder(DatasetBuilder):
             data = TorchGraphData(
                 # x = torch.tensor(data_dict_input['node_attr']).type(torch.float32),
                 edge_index = torch.tensor(data_dict_input['edge_index']).type(torch.LongTensor),
-                node_attr = torch.tensor(data_dict_input['node_attr']).type(torch.float32),
+                edge_attr = torch.tensor(data_dict_input['edge_attr']).type(torch.float32),
                 pressure = torch.tensor(data_dict_output['pressure']).type(torch.float32),
                 flowrate = torch.tensor(data_dict_output['flowrate']).type(torch.float32),
                 # velocity = torch.tensor(data_dict_output['velocity']).type(torch.float32)

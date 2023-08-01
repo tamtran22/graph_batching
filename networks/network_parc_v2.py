@@ -111,6 +111,10 @@ class MeshGraphNet(nn.Module):
             self.node_decoder = nn.Sequential(
                 gnn.Linear(hidden_channels, hidden_channels),
                 nn.ReLU(),
+                nn.Dropout(p=0.2),
+                gnn.Linear(hidden_channels, hidden_channels),
+                nn.ReLU(),
+                nn.Dropout(p=0.2),
                 gnn.Linear(hidden_channels, node_out_channels)
             )
         
@@ -121,6 +125,10 @@ class MeshGraphNet(nn.Module):
             self.edge_decoder = nn.Sequential(
                 gnn.Linear(hidden_channels, hidden_channels),
                 nn.ReLU(),
+                nn.Dropout(p=0.2),
+                gnn.Linear(hidden_channels, hidden_channels),
+                nn.ReLU(),
+                nn.Dropout(p=0.2),
                 gnn.Linear(hidden_channels, edge_out_channels)
             )
 
@@ -131,7 +139,7 @@ class MeshGraphNet(nn.Module):
         use_edge_attr = edge_in_channels > 0
         self.processor.append(ProcessorLayer(hidden_channels, use_edge_attr))
         for _ in range(n_layers - 1):
-            # Second layers onward input edge attr from the first layer.
+            # Second layers onward input edge attr from the previous layer.
             self.processor.append(ProcessorLayer(hidden_channels, True))
         
         self.reset_parameters()
@@ -147,11 +155,13 @@ class MeshGraphNet(nn.Module):
 
         if self.node_decoder is not None:
             self.node_decoder[0].reset_parameters()
-            self.node_decoder[2].reset_parameters()
+            self.node_decoder[3].reset_parameters()
+            self.node_decoder[6].reset_parameters()
         
         if self.edge_decoder is not None:
             self.edge_decoder[0].reset_parameters()
-            self.edge_decoder[2].reset_parameters()
+            self.edge_decoder[3].reset_parameters()
+            self.edge_decoder[6].reset_parameters()
         
         for i in range(len(self.processor)):
             self.processor[i].reset_parameters()
@@ -224,24 +234,94 @@ class PARC(nn.Module):
         F_bc : OptTensor = None
     ):
         feature_map = self.shape_descriptor(mesh_features, edge_index)
+        
+        F_previous = F_initial
 
         F_dots, Fs = [], []
-        F_current = F_initial
         for timestep in range(self.n_timesteps):
+            F_temp = torch.cat([feature_map, F_previous], dim=-1)
+
             if self.n_bcfields > 0:
-                F_temp = torch.cat([F_current, F_bc[:,timestep + 1].unsqueeze(1)], dim=1)
-            else:
-                F_temp = F_current
-            # print('1',F_temp.size())
-            F_temp = torch.cat([feature_map, F_temp], dim=-1)
-            # print('2',F_temp.size())
+                F_temp = torch.cat([F_temp, F_bc[:,timestep + 1].unsqueeze(1)], dim=1)
+
             F_dot = self.derivative_solver(F_temp, edge_index)
-            # print('3', F_dot.size())
 
-            F_int = self.integral_solver(F_dot, edge_index)
-            # print('4', F_int.size())
+            F_current = self.integral_solver(F_dot.detach(), edge_index)
 
-            F_current = F_current + F_int
+            F_previous = F_current.detach() # detach is important
+
+            F_dots.append(F_dot.unsqueeze(1))
+            Fs.append(F_current.unsqueeze(1))
+        
+        F_dots = torch.cat(F_dots, dim=1)
+        Fs = torch.cat(Fs, dim=1)
+
+        return Fs, F_dots
+    
+
+
+##########################
+class PARC_reduced(nn.Module):
+    def __init__(self,
+        n_fields,
+        n_timesteps,
+        n_hiddenfields,
+        n_meshfields,
+        n_bcfields,
+        **kwargs
+    ) -> None:
+        super().__init__(**kwargs)
+        self.n_fields = n_fields
+        self.n_timesteps = n_timesteps
+        self.n_hiddenfields = n_hiddenfields
+        self.n_meshfields = n_meshfields
+        self.n_bcfields = n_bcfields
+        
+        self.derivative_solver = MeshGraphNet(
+            node_in_channels=self.n_fields + self.n_hiddenfields + self.n_bcfields,
+            node_out_channels=self.n_fields,
+            hidden_channels=self.n_hiddenfields,
+            n_layers=10
+        )
+
+        self.shape_descriptor = MeshGraphNet(
+            node_in_channels=n_meshfields,
+            node_out_channels=n_hiddenfields,
+            hidden_channels=n_hiddenfields,
+            n_layers=8
+        )
+
+        self.reset_parameters()
+    
+    def reset_parameters(self):
+        self.derivative_solver.reset_parameters()
+        self.shape_descriptor.reset_parameters()
+
+    def forward(self, 
+        F_initial : Tensor, 
+        mesh_features : Tensor, 
+        edge_index : Tensor, 
+        F_bc : OptTensor = None,
+        timesteps : float = None
+    ):
+        feature_map = self.shape_descriptor(mesh_features, edge_index)
+        
+        F_previous = F_initial
+        F_dot_previous = torch.zeros_like(F_initial)
+
+        F_dots, Fs = [], []
+        for timestep in range(self.n_timesteps):
+            F_temp = torch.cat([feature_map, F_previous], dim=-1)
+
+            if self.n_bcfields > 0:
+                F_temp = torch.cat([F_temp, F_bc[:,timestep + 1].unsqueeze(1)], dim=1)
+
+            F_dot = self.derivative_solver(F_temp, edge_index)
+
+            F_current = F_previous + timesteps * 0.5* (F_dot + F_dot_previous)
+
+            F_previous = F_current.detach() # detach is important???
+            F_dot_previous = F_dot
 
             F_dots.append(F_dot.unsqueeze(1))
             Fs.append(F_current.unsqueeze(1))

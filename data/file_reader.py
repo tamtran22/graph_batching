@@ -3,15 +3,15 @@ import numpy as np
 
 def read_1D_input(
         file_name : str,
-        # var_dict = {
-        #     'node_attr' : ['x_end', 'y_end', 'z_end'], 
-        #     'edge_index' : ['PareID', 'ID'], 
-        #     'edge_attr' : ['Length', 'Diameter', 'Gene', 'Lobe', 'Flag', 'Vol0', 'Vol1']
-        # },
         var_dict = {
-            'node_attr' : ['x_end', 'y_end', 'z_end', 'Length', 'Diameter', 'Gene', 'Lobe', 'Flag', 'Vol0', 'Vol1'], 
-            'edge_index' : ['PareID', 'ID']
-        }
+            'node_attr' : ['x_end', 'y_end', 'z_end'], 
+            'edge_index' : ['PareID', 'ID'], 
+            'edge_attr' : ['x_start', 'y_start', 'z_start', 'x_end', 'y_end', 'z_end', 'Length', 'Diameter', 'Gene', 'Lobe', 'Flag', 'Vol0', 'Vol1']
+        },
+        # var_dict = {
+        #     'node_attr' : ['x_end', 'y_end', 'z_end', 'Length', 'Diameter', 'Gene', 'Lobe', 'Flag', 'Vol0', 'Vol1'], 
+        #     'edge_index' : ['PareID', 'ID']
+        # }
     ):
     r"""Read Output_subject_Amount_St_whole.dat
     Data format
@@ -72,11 +72,12 @@ def read_1D_input(
         for data_var in var_dict[var]:
             out_dict[var].append(data_dict[data_var])
     out_dict['edge_index'] = np.array(out_dict['edge_index'], dtype=np.int32)
-    out_dict['node_attr'] = edge_to_node(np.array(out_dict['node_attr'], dtype=np.float32).transpose(),
-                                        out_dict['edge_index'])
-    out_dict['node_attr'][0][0] = data_dict['x_start'][0]
-    out_dict['node_attr'][0][1] = data_dict['x_start'][1]
-    out_dict['node_attr'][0][2] = data_dict['x_start'][2]
+    out_dict['edge_attr'] = np.array(out_dict['edge_attr'], dtype=np.float32)
+    # out_dict['node_attr'] = edge_to_node(np.array(out_dict['node_attr'], dtype=np.float32).transpose(),
+    #                                     out_dict['edge_index'])
+    # out_dict['node_attr'][0][0] = data_dict['x_start'][0]
+    # out_dict['node_attr'][0][1] = data_dict['x_start'][1]
+    # out_dict['node_attr'][0][2] = data_dict['x_start'][2]
     # out_dict['edge_attr'] = edge_to_node(np.array(out_dict['edge_attr'], dtype=np.float32).transpose(),
     #                                     out_dict['edge_index'])
     return out_dict
@@ -147,8 +148,8 @@ def read_1D_output(
     for var in var_dict:
         out_dict[var] = np.concatenate(out_dict[var], axis=-1)
     edge_index = np.array(edge_index, dtype = np.int32).reshape((n_edge, 2)).transpose() - 1
-    # if out_dict['flowrate'] is not None:
-    #     out_dict['flowrate'] = node_to_edge(out_dict['flowrate'], edge_index)
+    if out_dict['flowrate'] is not None:
+        out_dict['flowrate'] = node_to_edge(out_dict['flowrate'], edge_index)
     return out_dict
 
 def node_to_edge(node_attr, edge_index):

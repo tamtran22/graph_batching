@@ -4,7 +4,7 @@ from torch.nn import ModuleList
 from torch_geometric.nn import GCNConv, GraphUNet, LayerNorm, Linear
 from torch_geometric.nn.resolver import activation_resolver
 from typing import Union, Callable
-from torch_geometric.typing import OptTensor
+from torch_geometric.typing import OptTensor, Tensor
 
 
 
@@ -92,7 +92,7 @@ class DerivativeSolver(torch.nn.Module):
                             dtype = torch.float32)
     
     def reset_parameters(self):
-        super().reset_parameters()
+        # super().reset_parameters()
         self.gcn_block1.reset_parameters()
         self.gcn_block2.reset_parameters()
         self.gcn_block3.reset_parameters()
@@ -105,7 +105,7 @@ class DerivativeSolver(torch.nn.Module):
         x = self.act(x)
         x = self.gcn_block3(x, edge_index)
         x = self.act(x)
-        # x = dropout(x,0.2)
+        x = F.dropout(x, p=0.2)
         x = self.F_dot(x, edge_index)
         # x = F.tanh(x)
         return x
@@ -154,7 +154,7 @@ class IntegralSolver(torch.nn.Module):
                             dtype = torch.float32)
     
     def reset_parameters(self):
-        super().reset_parameters()
+        # super().reset_parameters()
         self.gcn_block1.reset_parameters()
         self.gcn_block2.reset_parameters()
         self.gcn_block3.reset_parameters()
@@ -258,6 +258,62 @@ class PARC(torch.nn.Module):
         Fs = torch.cat(Fs, dim=1)
 
         return Fs, F_dots
+
+class PARC_reduced(torch.nn.Module):
+    def __init__(self,
+        n_fields,
+        n_timesteps,
+        n_hiddenfields,
+        n_meshfields,
+        n_bcfields,
+        **kwargs
+    ) -> None:
+        super().__init__(**kwargs)
+        self.n_fields = n_fields
+        self.n_timesteps = n_timesteps
+        self.n_hiddenfields = n_hiddenfields
+        self.n_meshfields = n_meshfields
+        self.n_bcfields = n_bcfields
+        
+        self.derivative_solver = DerivativeSolver(
+            in_channels = self.n_fields + self.n_hiddenfields + self.n_bcfields,
+            hidden_channels = self.n_hiddenfields,
+            out_channels = self.n_fields,
+            act = F.relu
+        )
+
+        self.shape_descriptor = GraphUNet(
+            in_channels = self.n_meshfields,
+            hidden_channels = self.n_hiddenfields,
+            out_channels = n_hiddenfields,
+            depth = 3,
+            pool_ratios = 0.2,
+            sum_res = True,
+            act = F.relu
+        )
+
+        self.reset_parameters()
+    
+    def reset_parameters(self):
+        self.derivative_solver.reset_parameters()
+        self.shape_descriptor.reset_parameters()
+
+    def forward(self, 
+        F_previous : Tensor, 
+        mesh_features : Tensor, 
+        edge_index : Tensor, 
+        F_bc_current : OptTensor = None
+    ):
+        feature_map = self.shape_descriptor(mesh_features, edge_index)
+
+        if self.n_bcfields > 0:
+            F_current = torch.cat([F_previous, F_bc_current.unsqueeze(1)], dim=1)
+
+        F_temp = torch.cat([feature_map, F_current], dim=-1)
+
+        F_dot = self.derivative_solver(F_temp, edge_index)
+
+        return F_dot
 
 
 if __name__=='__main__':

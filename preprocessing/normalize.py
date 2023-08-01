@@ -127,21 +127,31 @@ def calculate_weight(x : np.array, bins=1000) -> np.array:
 
 
 
-def calculate_derivative(data : TorchGraphData, var_name=None, axis=None, delta_t=None) -> torch.Tensor:
+def calculate_derivative(data : TorchGraphData, var_name=None, axis=None, 
+                        delta_t=None) -> torch.Tensor:
     if var_name==None:
         return 0
     else:
         F = data._store[var_name]
         F = F.transpose(0, axis)
         deriv_F = []
-        for i in range(0, F.size(0)):
+        # Euler method
+        # for i in range(0, F.size(0)):
+        #     i_prev = max(i-1, 0)
+        #     i_next = min(i+1, F.size(0)-1)
+        #     deriv_F_i = (F[i_next] - F[i_prev]) / ((i_next-i_prev)*delta_t)
+        #     deriv_F.append(deriv_F_i.unsqueeze(axis))
+        # Crank-Nicolson method
+        deriv_F_i_prev = (F[1] - F[0]) / delta_t
+        deriv_F.append(deriv_F_i_prev)
+        for i in range(1, F.size(0)):
             i_prev = max(i-1, 0)
-            i_next = min(i+1, F.size(0)-1)
-            deriv_F_i = (F[i_next] - F[i_prev]) / ((i_next-i_prev)*delta_t)
-            deriv_F.append(deriv_F_i.unsqueeze(axis))
-        return torch.cat(deriv_F, dim=axis)
+            # (F[i]-F[i_prev])/delta_t = alpha*deriv_F_i + (1-alpha)*deriv_F_i_prev
+            deriv_F_i = 2*(F[i] - F[i_prev]) / delta_t - deriv_F_i_prev
+            deriv_F_i_prev = deriv_F_i
+            deriv_F.append(deriv_F_i)
 
-    
+        return torch.cat(deriv_F, dim=axis)
 
 
 
