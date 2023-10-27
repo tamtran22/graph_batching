@@ -426,6 +426,7 @@ class OneDDatasetBuilder(DatasetBuilder):
                 # x = torch.tensor(data_dict_input['node_attr']).type(torch.float32),
                 edge_index = torch.tensor(data_dict_input['edge_index']).type(torch.LongTensor),
                 edge_attr = torch.tensor(data_dict_input['edge_attr']).type(torch.float32),
+                node_attr = torch.tensor(data_dict_input['node_attr']).type(torch.float32),
                 pressure = torch.tensor(data_dict_output['pressure']).type(torch.float32),
                 flowrate = torch.tensor(data_dict_output['flowrate']).type(torch.float32),
                 # velocity = torch.tensor(data_dict_output['velocity']).type(torch.float32)

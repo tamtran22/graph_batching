@@ -6,7 +6,7 @@ def read_1D_input(
         var_dict = {
             'node_attr' : ['x_end', 'y_end', 'z_end'], 
             'edge_index' : ['PareID', 'ID'], 
-            'edge_attr' : ['x_start', 'y_start', 'z_start', 'x_end', 'y_end', 'z_end', 'Length', 'Diameter', 'Gene', 'Lobe', 'Flag', 'Vol0', 'Vol1']
+            'edge_attr' : ['Length', 'Diameter', 'Gene', 'Lobe', 'Flag', 'Vol0', 'Vol1', 'Vol1-0']
         },
         # var_dict = {
         #     'node_attr' : ['x_end', 'y_end', 'z_end', 'Length', 'Diameter', 'Gene', 'Lobe', 'Flag', 'Vol0', 'Vol1'], 
@@ -56,15 +56,17 @@ def read_1D_input(
         data_dict[vars[i]] = _vectorized_float(data[i])
     
     # Rearange data
-    # data_dict['x_end'] = np.insert(data_dict['x_end'], 0, data_dict['x_start'][0])
-    # data_dict['y_end'] = np.insert(data_dict['y_end'], 0, data_dict['y_start'][0])
-    # data_dict['z_end'] = np.insert(data_dict['z_end'], 0, data_dict['z_start'][0])
+    data_dict['x_end'] = np.insert(data_dict['x_end'], 0, data_dict['x_start'][0])
+    data_dict['y_end'] = np.insert(data_dict['y_end'], 0, data_dict['y_start'][0])
+    data_dict['z_end'] = np.insert(data_dict['z_end'], 0, data_dict['z_start'][0])
 
     # Scaling data - cubic root of volume
     if data_dict['Vol0'] is not None:
         data_dict['Vol0'] = np.cbrt(data_dict['Vol0']) 
     if data_dict['Vol1'] is not None:
         data_dict['Vol1'] = np.cbrt(data_dict['Vol1']) 
+    if data_dict['Vol1-0'] is not None:
+        data_dict['Vol1-0'] = np.cbrt(data_dict['Vol1-0']) 
 
     out_dict = {}
     for var in var_dict:
@@ -72,9 +74,9 @@ def read_1D_input(
         for data_var in var_dict[var]:
             out_dict[var].append(data_dict[data_var])
     out_dict['edge_index'] = np.array(out_dict['edge_index'], dtype=np.int32)
-    out_dict['edge_attr'] = np.array(out_dict['edge_attr'], dtype=np.float32)
-    # out_dict['node_attr'] = edge_to_node(np.array(out_dict['node_attr'], dtype=np.float32).transpose(),
-    #                                     out_dict['edge_index'])
+    out_dict['edge_attr'] = np.array(out_dict['edge_attr'], dtype=np.float32).transpose()
+    out_dict['node_attr'] = edge_to_node(np.array(out_dict['node_attr'], dtype=np.float32).transpose(),
+                                        out_dict['edge_index'])
     # out_dict['node_attr'][0][0] = data_dict['x_start'][0]
     # out_dict['node_attr'][0][1] = data_dict['x_start'][1]
     # out_dict['node_attr'][0][2] = data_dict['x_start'][2]

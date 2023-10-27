@@ -142,15 +142,17 @@ def _get_graph_partition_v2(data : TorchGraphData, partition : np.array, recursi
     for key in data._store:
         if key == 'edge_index':
             partition_data_dict[key] = partition_edge_index
-        else:
+        elif key in ['node_attr', 'pressure', 'flowrate', 'flowrate_bc']:
             partition_data_dict[key] = data._store[key][partition_node_id]
+        elif key in ['edge_attr']:
+            partition_data_dict[key] = data._store[key][partition_edge_id]
 
     partition_node_weight = None
-    if data.node_weight is not None:
-        partition_node_weight = data.node_weight[partition_node_id]
-        partition_node_mark = np.isin(partition_node_id, partition)
-        partition_node_mark = torch.tensor(partition_node_mark, dtype=torch.int)
-        partition_node_weight *= partition_node_mark
+    # if data.node_weight is not None:
+    #     partition_node_weight = data.node_weight[partition_node_id]
+    #     partition_node_mark = np.isin(partition_node_id, partition)
+    #     partition_node_mark = torch.tensor(partition_node_mark, dtype=torch.int)
+    #     partition_node_weight *= partition_node_mark
 
     # partition_edge_weight = None
     # if data.edge_weight is not None:
